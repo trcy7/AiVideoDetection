@@ -1,0 +1,313 @@
+.rpage {
+  padding-block: var(--space-5) var(--section-pad-y);
+  animation: rpage-in 0.4s ease both;
+}
+
+@keyframes rpage-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.rpage__topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.rpage__back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 38px;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--glass-bg);
+  backdrop-filter: blur(6px);
+  color: var(--color-text);
+  text-decoration: none;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--text-sm);
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.rpage__back:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.rpage__crumb {
+  color: var(--color-accent);
+}
+
+/* ---- scanning state ---- */
+
+.rpage__scanning {
+  max-width: 900px;
+  margin: var(--space-7) auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.rpage__scanning-head {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* ---- scanning viewport ---- */
+
+.scan {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+  text-align: left;
+}
+
+.scan__viewport {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border-strong);
+  box-shadow: var(--shadow-lg), inset 0 1px 0 var(--card-highlight);
+}
+
+.scan__video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.scan__video--empty {
+  background:
+    radial-gradient(300px 160px at 50% 40%, var(--ambient-glow), transparent 70%),
+    var(--color-surface-sunken);
+}
+
+.scan__grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 30px 30px;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+}
+
+/* sweeping scan line */
+.scan__line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -45%;
+  height: 45%;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--color-accent) 26%, transparent)
+  );
+  border-bottom: 2px solid var(--color-accent);
+  box-shadow: 0 0 18px var(--glow-accent);
+  animation: scan-sweep 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}
+
+@keyframes scan-sweep {
+  0% {
+    top: -45%;
+  }
+  100% {
+    top: 100%;
+  }
+}
+
+.scan__corners span {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--color-accent);
+  opacity: 0.9;
+}
+.scan__corners span:nth-child(1) {
+  top: 10px;
+  left: 10px;
+  border-right: 0;
+  border-bottom: 0;
+  border-radius: 4px 0 0 0;
+}
+.scan__corners span:nth-child(2) {
+  top: 10px;
+  right: 10px;
+  border-left: 0;
+  border-bottom: 0;
+  border-radius: 0 4px 0 0;
+}
+.scan__corners span:nth-child(3) {
+  bottom: 10px;
+  right: 10px;
+  border-left: 0;
+  border-top: 0;
+  border-radius: 0 0 4px 0;
+}
+.scan__corners span:nth-child(4) {
+  bottom: 10px;
+  left: 10px;
+  border-right: 0;
+  border-top: 0;
+  border-radius: 0 0 0 4px;
+}
+
+.scan__badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-surface) 62%, transparent);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--color-border);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--color-accent);
+}
+
+.scan__badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: 0 0 8px var(--color-accent);
+  animation: scan-blink 1.4s ease-in-out infinite;
+}
+
+@keyframes scan-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.scan__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+@media (max-width: 820px) {
+  .scan {
+    grid-template-columns: 1fr;
+  }
+}
+
+.rpage__title {
+  font-size: var(--text-2xl);
+  letter-spacing: -0.02em;
+}
+
+.rpage__subtitle {
+  color: var(--color-text-muted);
+  font-size: var(--text-base);
+}
+
+.rpage__filename {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+/* ---- results actions ---- */
+
+.rpage__actions {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-5);
+}
+
+/* ---- empty state ---- */
+
+.rpage__empty {
+  max-width: 720px;
+  margin: var(--space-6) auto 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.rpage__empty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  text-align: center;
+  padding: var(--space-7) var(--space-5);
+}
+
+.rpage__empty-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-md);
+  background: var(--color-accent-muted);
+  color: var(--color-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rpage__empty-cta {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  margin-top: var(--space-2);
+}
+
+/* ---- error state ---- */
+
+.rpage__empty-card--error {
+  border-color: var(--color-fake-border);
+}
+
+.rpage__empty-icon--error {
+  background: var(--color-fake-bg);
+  color: var(--color-fake);
+}
+
+.rpage__error-detail {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  max-width: 52ch;
+  word-break: break-word;
+}
+
+.rpage__error-actions {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: var(--space-2);
+}

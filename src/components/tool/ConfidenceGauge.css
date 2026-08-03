@@ -1,0 +1,112 @@
+.gauge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.gauge__svg {
+  width: min(100%, 320px);
+  height: auto;
+  overflow: visible;
+}
+
+.gauge__zone {
+  stroke-linecap: butt;
+}
+
+.gauge__zone--real {
+  stroke: var(--color-real-mark);
+}
+
+.gauge__zone--uncertain {
+  stroke: var(--color-uncertain-mark);
+}
+
+.gauge__zone--fake {
+  stroke: var(--color-fake-mark);
+}
+
+.gauge__axis-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  fill: var(--color-text-muted);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.gauge__needle-group {
+  transform-origin: 110px 110px;
+  transition: transform 1.1s cubic-bezier(0.22, 0.9, 0.3, 1);
+}
+
+.gauge__needle {
+  fill: var(--color-text);
+}
+
+.gauge--real .gauge__needle {
+  fill: var(--color-real-mark);
+}
+
+.gauge--uncertain .gauge__needle {
+  fill: var(--color-uncertain-mark);
+}
+
+.gauge--fake .gauge__needle {
+  fill: var(--color-fake-mark);
+}
+
+.gauge__pivot {
+  fill: var(--color-surface);
+  stroke: var(--color-border-strong);
+  stroke-width: 2;
+}
+
+.gauge__readout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: calc(var(--space-3) * -1);
+}
+
+.gauge__score {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+}
+
+.gauge__score-max {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-muted);
+  margin-left: 2px;
+}
+
+.gauge__caption {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--label-tracking);
+}
+
+/* Numeric threshold ticks drawn at the zone boundaries on the arc */
+.gauge__tick-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  fill: var(--color-text-muted);
+  opacity: 0.75;
+}
+
+/* Calibrated-threshold hint under the score (e.g. "needs > 94.5 for AI") */
+.gauge__bands {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  opacity: 0.8;
+  margin-top: 2px;
+}

@@ -1,0 +1,189 @@
+/* ---- bento grid: one hero card, two compact, one full-width ---- */
+
+.features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+}
+
+.feature-card--hero {
+  grid-column: 1 / 3;
+  grid-row: 1 / 3;
+}
+
+.feature-card--wide {
+  grid-column: 1 / 4;
+}
+
+.feature-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-5);
+  background: var(--glass-bg);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm), inset 0 1px 0 var(--card-highlight);
+  overflow: hidden;
+}
+
+/* gradient top hairline that wipes in on hover */
+.feature-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--gradient-brand);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--transition);
+}
+
+.feature-card:hover::before {
+  transform: scaleX(1);
+}
+
+/* ---- icon tiles ---- */
+
+.feature-card__icon {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  display: grid;
+  place-items: center;
+  color: var(--color-accent);
+  background: var(--color-accent-muted);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 30%, var(--color-border));
+  margin-bottom: var(--space-1);
+}
+
+.feature-card__icon--lg {
+  width: 52px;
+  height: 52px;
+  color: var(--color-accent-contrast);
+  background: var(--gradient-brand);
+  border-color: transparent;
+  box-shadow: 0 4px 16px var(--glow-accent), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+/* ---- hero card ---- */
+
+.feature-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.feature-card__tag {
+  color: var(--color-accent);
+}
+
+.feature-card__title {
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.feature-card--hero .feature-card__title {
+  font-size: var(--text-xl);
+}
+
+.feature-card__description {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
+
+/* ---- hero heatmap visual, pinned to the bottom of the tall card ---- */
+
+.feature-viz {
+  margin-top: auto;
+  padding-top: var(--space-5);
+}
+
+.feature-viz__svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.feature-viz__cell {
+  fill: var(--color-accent);
+}
+
+.feature-viz__box {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+}
+
+.is-revealed .feature-viz__box {
+  animation: viz-track 8s linear infinite;
+}
+
+@keyframes viz-track {
+  to {
+    stroke-dashoffset: -144;
+  }
+}
+
+/* ---- full-width card: icon beside text ---- */
+
+.feature-card--wide {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.feature-card--wide .feature-card__icon {
+  margin-bottom: 0;
+}
+
+.feature-card__wide-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* ---- responsive: bento -> 2 columns -> single column ---- */
+
+@media (max-width: 1000px) {
+  .features {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .feature-card--hero {
+    grid-column: 1 / 3;
+    grid-row: auto;
+  }
+
+  .feature-card--wide {
+    grid-column: 1 / 3;
+  }
+}
+
+@media (max-width: 560px) {
+  .features {
+    grid-template-columns: 1fr;
+  }
+
+  .feature-card--hero,
+  .feature-card--wide {
+    grid-column: 1;
+  }
+
+  .feature-card--wide {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

@@ -1,0 +1,145 @@
+.verdict-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.verdict-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.verdict-card__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--text-base);
+  border: 1px solid transparent;
+}
+
+.verdict-card__badge--real {
+  color: var(--color-real);
+  background: var(--color-real-bg);
+  border-color: var(--color-real-border);
+}
+
+.verdict-card__badge--fake {
+  color: var(--color-fake);
+  background: var(--color-fake-bg);
+  border-color: var(--color-fake-border);
+}
+
+.verdict-card__badge--uncertain {
+  color: var(--color-uncertain);
+  background: var(--color-uncertain-bg);
+  border-color: var(--color-uncertain-border);
+}
+
+.verdict-card__confidence {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--text-lg);
+  font-variant-numeric: tabular-nums;
+}
+
+.verdict-card__confidence-label {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.verdict-card__description {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.verdict-card__branches {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.verdict-card__branches-title {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--label-tracking);
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-1);
+}
+
+.verdict-card__branch {
+  display: grid;
+  grid-template-columns: 92px 1fr 32px;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.verdict-card__branch-label {
+  font-size: var(--text-sm);
+}
+
+.verdict-card__branch-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-surface-sunken);
+  overflow: hidden;
+}
+
+.verdict-card__branch-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.8s cubic-bezier(0.22, 0.9, 0.3, 1);
+}
+
+.verdict-card__branch-fill--real {
+  background: var(--color-real-mark);
+}
+
+.verdict-card__branch-fill--uncertain {
+  background: var(--color-uncertain-mark);
+}
+
+.verdict-card__branch-fill--fake {
+  background: var(--color-fake-mark);
+}
+
+.verdict-card__branch-value {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* Branches that haven't shipped yet (frequency/optical flow in v1) */
+.verdict-card__branch.is-pending .verdict-card__branch-label {
+  color: var(--color-text-muted);
+}
+
+.verdict-card__branch.is-pending .verdict-card__branch-track {
+  opacity: 0.45;
+}
+
+.verdict-card__branch-soon {
+  justify-self: end;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border-strong);
+}

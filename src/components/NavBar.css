@@ -1,0 +1,199 @@
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--glass-bg);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  border-bottom: 1px solid var(--color-border);
+  box-shadow: 0 1px 0 var(--card-highlight), var(--shadow-sm);
+}
+
+.navbar__inner {
+  height: var(--nav-height);
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+.navbar__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.navbar__brand-mark {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--gradient-brand);
+  box-shadow:
+    0 2px 12px var(--glow-accent),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  transition: transform var(--transition), box-shadow var(--transition);
+}
+
+/* glassy sheen sweeping the top-left corner */
+.navbar__brand-mark::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.3), transparent 52%);
+  pointer-events: none;
+}
+
+.navbar__brand:hover .navbar__brand-mark {
+  transform: translateY(-1px) scale(1.04);
+  box-shadow:
+    0 5px 20px var(--glow-accent),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.navbar__brand-glyph {
+  position: relative;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+}
+
+.navbar__brand-glyph rect {
+  fill: #fff;
+}
+/* middle arm slightly recessed for depth */
+.navbar__brand-glyph rect:nth-child(3) {
+  opacity: 0.8;
+}
+
+.navbar__brand-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.08rem;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+}
+
+.navbar__links {
+  display: flex;
+  gap: var(--space-5);
+  flex: 1;
+  justify-content: center;
+}
+
+.navbar__link {
+  position: relative;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  padding: var(--space-2) 0;
+  transition: color var(--transition);
+}
+
+/* animated gradient underline on hover / active */
+.navbar__link::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--gradient-brand);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--transition);
+}
+
+.navbar__link:hover {
+  color: var(--color-text);
+}
+
+.navbar__link:hover::after,
+.navbar__link--active::after {
+  transform: scaleX(1);
+}
+
+.navbar__link--active {
+  color: var(--color-accent);
+}
+
+.navbar__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-left: auto;
+}
+
+.navbar__burger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 40px;
+  height: 40px;
+  padding: 10px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.navbar__burger-bar {
+  display: block;
+  height: 2px;
+  width: 100%;
+  background: var(--color-text);
+  border-radius: 1px;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.navbar__burger[aria-expanded="true"] .navbar__burger-bar:nth-child(1) {
+  transform: translateY(6px) rotate(45deg);
+}
+.navbar__burger[aria-expanded="true"] .navbar__burger-bar:nth-child(2) {
+  opacity: 0;
+}
+.navbar__burger[aria-expanded="true"] .navbar__burger-bar:nth-child(3) {
+  transform: translateY(-6px) rotate(-45deg);
+}
+
+.navbar__mobile {
+  display: none;
+  flex-direction: column;
+  padding: var(--space-2) clamp(16px, 4vw, 32px) var(--space-4);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.navbar__mobile-link {
+  padding: var(--space-3) var(--space-2);
+  color: var(--color-text);
+  text-decoration: none;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+}
+
+.navbar__mobile-link:hover {
+  background: var(--color-surface-raised);
+}
+
+@media (max-width: 767px) {
+  .navbar__links {
+    display: none;
+  }
+  .navbar__burger {
+    display: flex;
+  }
+  .navbar__mobile {
+    display: flex;
+  }
+}

@@ -1,0 +1,34 @@
+file,label,score,pred,correct,family,orientation,lighting,resolution,width,height,brightness
+2.mp4,ai_generated,69.9,real,0,unknown,portrait,normal,medium(<=720p),576,1048,113.9
+3.mp4,ai_generated,87.9,real,0,unknown,portrait,normal,medium(<=720p),576,1024,116.4
+5.mp4,ai_generated,99.9,ai_generated,1,unknown,portrait,normal,low(<=360p),360,640,118.9
+6.mp4,ai_generated,98.6,ai_generated,1,unknown,square,normal,medium(<=720p),576,576,95.7
+7.mp4,ai_generated,96.9,ai_generated,1,unknown,portrait,normal,medium(<=720p),576,1024,116.1
+AI.mp4,ai_generated,100.0,ai_generated,1,unknown,landscape,normal,low(<=360p),640,360,88.3
+AI2.mp4,ai_generated,99.3,ai_generated,1,unknown,landscape,normal,medium(<=720p),864,576,98.2
+AI3.mp4,ai_generated,98.8,ai_generated,1,unknown,landscape,normal,medium(<=720p),1024,576,110.1
+FAKE 28.mp4,ai_generated,98.0,ai_generated,1,unknown,portrait,normal,high(>720p),1440,2160,119.0
+FAKE 40.mp4,ai_generated,97.8,ai_generated,1,unknown,portrait,normal,high(>720p),1080,1920,126.3
+FAKE.mp4,ai_generated,100.0,ai_generated,1,unknown,landscape,normal,high(>720p),2560,1440,152.1
+FAKE1.mp4,ai_generated,11.8,real,0,unknown,portrait,normal,high(>720p),1080,1920,69.5
+FAKE2.mp4,ai_generated,99.9,ai_generated,1,unknown,landscape,normal,medium(<=720p),1280,720,147.1
+FAKE21.mp4,ai_generated,100.0,ai_generated,1,unknown,landscape,normal,high(>720p),1920,1080,84.8
+FAKE3 (1).mp4,ai_generated,99.8,ai_generated,1,unknown,landscape,normal,high(>720p),1920,1080,97.1
+FAKE3.mp4,ai_generated,100.0,ai_generated,1,unknown,landscape,normal,medium(<=720p),864,496,95.3
+FAKE4.mp4,ai_generated,83.2,real,0,unknown,landscape,normal,medium(<=720p),864,496,147.7
+video.mp4,ai_generated,67.1,real,0,unknown,portrait,normal,medium(<=720p),720,1280,118.1
+1.mp4,real,99.4,ai_generated,0,unknown,portrait,normal,medium(<=720p),576,1024,112.6
+8.mp4,real,78.6,real,1,unknown,landscape,normal,medium(<=720p),682,576,155.2
+Download (3).mp4,real,1.0,real,1,unknown,portrait,dark,medium(<=720p),576,1024,54.6
+Download (4).mp4,real,87.2,real,1,unknown,landscape,normal,medium(<=720p),768,576,75.8
+Download (5).mp4,real,52.5,real,1,unknown,landscape,dark,medium(<=720p),1030,576,28.8
+Download.mp4,real,55.9,real,1,unknown,landscape,normal,medium(<=720p),768,576,76.7
+josh.mp4,real,52.7,real,1,unknown,portrait,normal,medium(<=720p),576,1024,137.3
+PIXECT-V20231127141506.webm,real,84.9,real,1,unknown,landscape,normal,medium(<=720p),960,720,163.4
+REAL (24).mp4,real,0.1,real,1,unknown,portrait,normal,medium(<=720p),576,1024,134.4
+REAL (49).mp4,real,93.1,ai_generated,0,unknown,portrait,normal,high(>720p),1440,2560,66.9
+REAL (66).mp4,real,99.0,ai_generated,0,unknown,portrait,dark,high(>720p),1440,2560,2.5
+ugc_HowTo_5bfd627a86.mp4,real,4.5,real,1,youtube_ugc (wild),landscape,dark,medium(<=720p),1280,720,22.9
+ugc_Lecture_434c4f89fd.mp4,real,56.4,real,1,youtube_ugc (wild),landscape,normal,medium(<=720p),854,480,162.2
+WIN_20221010_21_14_27_Pro.mp4,real,69.3,real,1,unknown,landscape,normal,medium(<=720p),1280,720,74.0
+WIN_20260709_10_23_28_Pro.mp4,real,96.6,ai_generated,0,unknown,landscape,normal,medium(<=720p),1280,720,105.8

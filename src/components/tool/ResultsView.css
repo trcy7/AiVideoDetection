@@ -1,0 +1,159 @@
+.rview {
+  display: grid;
+  grid-template-columns: minmax(320px, 400px) minmax(0, 1fr);
+  grid-template-areas:
+    "header  header"
+    "left    main"
+    "report  report"
+    "history history";
+  gap: var(--space-5);
+  align-items: start;
+  animation: rview-in 0.5s ease both;
+}
+
+@keyframes rview-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.rview__header {
+  grid-area: header;
+}
+
+.rview__left {
+  grid-area: left;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.rview__main {
+  grid-area: main;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.rview__history {
+  grid-area: history;
+  min-width: 0;
+}
+
+/* ---- full-width detection report bar (matches the classic layout) ---- */
+
+.rview__report {
+  grid-area: report;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  flex-wrap: wrap;
+}
+
+.rview__report-text h3,
+.rview__heatmap-header h3 {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* signature gradient underline under each section heading */
+.rview__report-text h3::after,
+.rview__heatmap-header h3::after {
+  content: "";
+  display: block;
+  width: 34px;
+  height: 3px;
+  margin-top: 7px;
+  border-radius: 2px;
+  background: var(--gradient-brand);
+}
+
+.rview__report-text p {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.rview__report-actions {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.rview__report-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-strong);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  text-decoration: none;
+  background: transparent;
+  transition: border-color 0.15s ease, color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.rview__report-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  transform: translateY(-1px);
+}
+
+.rview__report-btn--primary {
+  background: var(--gradient-brand);
+  border-color: transparent;
+  color: var(--color-accent-contrast);
+  box-shadow: 0 4px 16px var(--glow-accent), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.rview__report-btn--primary:hover {
+  color: var(--color-accent-contrast);
+  box-shadow: 0 8px 26px var(--glow-accent), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.rview__verdict {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+}
+
+.rview__heatmap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+}
+
+.rview__heatmap-header p {
+  margin-top: 4px;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+/* Mobile/tablet: single column — verdict/video, heatmap, report, history */
+@media (max-width: 860px) {
+  .rview {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "header"
+      "left"
+      "main"
+      "report"
+      "history";
+  }
+}

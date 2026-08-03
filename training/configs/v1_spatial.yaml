@@ -1,0 +1,106 @@
+# Chronos-Spatial v1 (spatial branch, FULLY AI-GENERATED detection).
+# All paths are relative to the training/ directory; run commands from there.
+#
+# v1 preprocessing contract: each whole frame is RESIZED to a square (aspect
+# distorted, no bars, no cropping, no face detection) so orientation carries
+# no signal. Training and inference both follow it — a mismatch here silently
+# destroys accuracy.
+
+seed: 42
+
+paths:
+  raw_dir: data/raw
+  # frame_path entries in index CSVs and the manifest are RELATIVE to this
+  # root — Kaggle batch tars extract here and line up with local output.
+  data_root: data
+  # Merged by build_manifest: matches local output (frames_index_local.csv)
+  # and Kaggle batch outputs (frames_index_aigen.csv, frames_index_real.csv).
+  frames_index_glob: data/frames_index*.csv
+  manifest: data/manifest.csv
+  outputs_dir: outputs
+
+extraction:
+  image_size: 380          # 380 pairs with tf_efficientnet_b4_ns; use 224 with b0
+  # CONTIGUOUS windows for the hybrid's ConvLSTM temporal branch -> REAL MOTION,
+  # not 0.5s jumps. n_windows windows spread across the clip; frames/video =
+  # window_len * n_windows. Set window_len: 1 for plain uniform sampling.
+  window_len: 16
+  n_windows: 2
+  # TIME-NORMALIZED stride: in-window frames are ~1/target_fps sec apart no
+  # matter the source frame rate. AI generators often render 8-24fps vs real
+  # cameras 30-60fps; a fixed source-frame stride would let the ConvLSTM read
+  # frame rate off the motion step size (a shortcut). 16 frames @ 12fps = 1.33s.
+  target_fps: 12
+  frame_stride: 2          # fallback only, used when a file reports no fps
+  # Strip letterbox/pillarbox bars BAKED INTO THE PIXELS before resize-square,
+  # so bar geometry can't re-encode orientation (the original shortcut).
+  # Conservative: only near-black uniform borders, one common box per video.
+  # inference.py reads this flag from the checkpoint and trims identically.
+  trim_black_borders: true
+
+splits:
+  train: 0.70
+  val: 0.15
+  test: 0.15
+  # Groups a portrait crop (stem "<orig>_pcrop_<hash>") with its landscape
+  # original (stem "<orig>") so both land in the SAME split — same content;
+  # splitting them leaks near-duplicates between train and test. A video with
+  # no _pcrop suffix groups only with itself (group(1) = own stem), so this is
+  # harmless for the landscape-only round.
+  scene_regex: "^(.+?)(?:_pcrop(?:_[0-9a-f]+)?)?$"
+
+model:
+  # THE model: EfficientNet (per-frame spatial artifacts) + ConvLSTM over the
+  # frame feature maps (temporal artifacts: flicker, identity drift, physics)
+  # + fusion head, trained JOINTLY end to end. arch: spatial = legacy variant.
+  arch: hybrid
+  backbone: tf_efficientnet_b4_ns   # allow tf_efficientnet_b0_ns for fast iteration
+  pretrained: true
+  dropout: 0.3
+  convlstm:
+    hidden_channels: 256   # ConvLSTM state channels (per spatial cell)
+    kernel_size: 3
+  fusion_hidden: 256
+
+train:
+  batch_size: 16           # b4@380 is heavy; raise for b0@224 or a big GPU
+  # HYBRID: windows per step (each = window_len frames through the backbone).
+  # This is the memory knob: phase 1 (frozen backbone, no_grad) can take more;
+  # if phase 2 OOMs on a 16GB GPU, drop to 2.
+  batch_videos: 4
+  # Aux losses keep each branch independently discriminative while the fused
+  # logit is the main objective: loss = BCE(fused) + w*(BCE(spat)+BCE(temp)).
+  aux_loss_weight: 0.3
+  num_workers: 4
+  epochs_head: 3           # phase 1: frozen backbone, train the head
+  epochs_finetune: 12      # phase 2: top blocks unfrozen
+  lr_head: 1.0e-3          # phase-1 head LR
+  lr_finetune_head: 1.0e-4 # phase-2 head LR
+  lr_backbone: 1.0e-5      # phase-2 backbone LR (discriminative)
+  weight_decay: 1.0e-4
+  unfreeze_blocks: 3       # trailing backbone blocks to unfreeze in phase 2
+  early_stop_patience: 4   # epochs without val video-AUC improvement
+  # Enable if real:fake balance falls outside ~40-60 (e.g. 5000 real vs
+  # 3000 ai_generated) and you don't want to cap the larger class.
+  use_weighted_sampler: false
+  amp: true                # mixed precision when CUDA is available
+
+augment:
+  # Each flag defends against one shortcut category. Turn a group off only to
+  # ablate it — all on is the shortcut-resistant default.
+  aspect_jitter: true      # orientation / aspect ratio  (portrait vs landscape)
+  portrait_squash: true    # anamorphic squash BOTH ways -> portrait uploads stay in-dist
+  horizontal_flip: true    # framing / left-right
+  lighting: true           # brightness, gamma, hue/sat  (lighting, white balance, camera)
+  resolution: true         # random downscale            (fixes "low-res => fake")
+  compression: true        # JPEG recompression          (fixes "compressed => fake")
+  blur: true               # gaussian / motion blur      (focus, camera)
+  noise: true              # gaussian / ISO sensor noise (device, sensor)
+  overlays: true           # synthetic watermarks/UI on BOTH classes (kills "overlay = AI/real" cue)
+
+inference:
+  frames_per_video: 32
+  cam_threshold: 0.60      # GradCAM activation cutoff for suspicious regions
+  max_boxes: 3
+  verdict_real_below: 35   # fakeScore < 35 -> "real"
+  verdict_fake_above: 65   # fakeScore > 65 -> "fake"; else "uncertain"

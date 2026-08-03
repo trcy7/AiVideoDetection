@@ -1,0 +1,40 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Python (training backend)
+training/.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Training data & run outputs (large, regenerated locally)
+training/data/
+training/outputs/
+
+# Model checkpoint — uncomment once you confirm best.pt is small enough to commit,
+# otherwise leave this ignored and host the file on Kaggle/Drive instead
+training/models/ECNet-7.pt
+
+.claude/
