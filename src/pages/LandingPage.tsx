@@ -9,9 +9,10 @@ import { FAQ } from "../components/sections/FAQ";
 export function LandingPage() {
   return (
     <>
+      <UploadSection />
+      <SectionDivider />
       <Hero />
       <StatsBand />
-      <UploadSection />
       <SectionDivider />
       <HowItWorks />
       <SectionDivider />

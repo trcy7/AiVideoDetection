@@ -2,10 +2,11 @@
   display: grid;
   grid-template-columns: minmax(320px, 400px) minmax(0, 1fr);
   grid-template-areas:
-    "header  header"
-    "left    main"
-    "report  report"
-    "history history";
+    "header   header"
+    "left     main"
+    "report   report"
+    "feedback feedback"
+    "history  history";
   gap: var(--space-5);
   align-items: start;
   animation: rview-in 0.5s ease both;
@@ -154,6 +155,30 @@
       "left"
       "main"
       "report"
+      "feedback"
       "history";
+  }
+}
+
+@media (max-width: 560px) {
+  .rview {
+    gap: var(--space-4);
+  }
+  .rview__report {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+  }
+  .rview__report-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .rview__report-btn {
+    justify-content: center;
+    padding-inline: var(--space-3);
+  }
+  .rview__verdict,
+  .rview__heatmap {
+    padding: var(--space-4);
   }
 }

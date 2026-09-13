@@ -178,6 +178,27 @@ export function buildReportUrl(r: {
     t(xr - wOf(s, size, bold), y, size, s, bold);
   const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n - 3) + "..." : s);
 
+  /** Greedy word-wrap (PDF has no reflow). Returns the y below the last line. */
+  const para = (x: number, y: number, size: number, s: string, maxW: number, lead = 13.5) => {
+    let line = "";
+    let yy = y;
+    for (const word of ascii(s).split(/\s+/).filter(Boolean)) {
+      const test = line ? `${line} ${word}` : word;
+      if (line && wOf(test, size) > maxW) {
+        t(x, yy, size, line);
+        yy -= lead;
+        line = word;
+      } else {
+        line = test;
+      }
+    }
+    if (line) {
+      t(x, yy, size, line);
+      yy -= lead;
+    }
+    return yy;
+  };
+
   const INK = "0.09 0.13 0.20";
   const MUT = "0.42 0.47 0.55";
   const LINE = "0.86 0.89 0.93";
@@ -201,7 +222,7 @@ export function buildReportUrl(r: {
   fill(MUT); t(L, 685, 11, clip(r.fileName, 66));
 
   // verdict banner
-  const by = 600, bh = 64;
+  const by = 604, bh = 64;
   fill(V.bg); box(L, by, W, bh);
   fill(V.c); box(L, by, 4, bh);
   fill(MUT); t(L + 20, by + bh - 20, 8.5, "VERDICT", true);
@@ -209,8 +230,21 @@ export function buildReportUrl(r: {
   fill(MUT); tR(RT - 20, by + bh - 20, 8.5, "AI-GENERATION SCORE", true);
   fill(INK); tR(RT - 20, by + 15, 21, `${r.fakeScore.toFixed(0)} / 100`, true);
 
+  // plain-language assessment of THIS result
+  const bandsTxt = r.bands
+    ? `Calibrated thresholds for this model: real below ${r.bands.realBelow}, AI generated above ${r.bands.fakeAbove}.`
+    : "";
+  const ASSESS: Record<Verdict, string> = {
+    real: `ECNet found no consistent evidence of synthetic generation in this clip. Per-frame texture and inter-frame motion both behaved like camera-captured footage across the frames analyzed. ${bandsTxt}`,
+    fake: `ECNet detected artifacts consistent with an AI video generator. The evidence was present across the sampled frames rather than isolated to a single moment, and the highlighted regions below mark where it was strongest. ${bandsTxt}`,
+    uncertain: `The evidence for this clip was mixed. Its score falls between the calibrated thresholds, so ECNet does not issue a definitive call. Treat this result as inconclusive and review the flagged frames manually. ${bandsTxt}`,
+  };
+  fill(MUT); t(L, 580, 9, "ASSESSMENT", true);
+  fill(INK);
+  para(L, 564, 10, ASSESS[r.verdict], W, 13.5);
+
   // summary
-  let y = 548;
+  let y = 508;
   fill(MUT); t(L, y, 9, "SUMMARY", true); y -= 22;
   for (const [k, v] of [
     ["Confidence", `${r.confidence.toFixed(1)}%`],
@@ -255,10 +289,10 @@ export function buildReportUrl(r: {
   if (imgs.length) {
     const gap = 16;
     const slotW = imgs.length === 2 ? (W - gap) / 2 : 300;
-    const maxH = imgs.length === 2 ? 150 : 172;
-    const topY = 316;
+    const maxH = imgs.length === 2 ? 148 : 168;
+    const topY = y - 18;                       // flows below the branch bars
     const capY = topY - maxH - 12;
-    fill(MUT); t(L, 330, 9, imgs[0].caption.startsWith("Frame") ? "SAMPLED FRAMES" : "FLAGGED FRAMES", true);
+    fill(MUT); t(L, y - 4, 9, imgs[0].caption.startsWith("Frame") ? "SAMPLED FRAMES" : "FLAGGED FRAMES", true);
     imgs.forEach((im, i) => {
       let dw = slotW;
       let dh = (dw * im.h) / im.w;
@@ -282,14 +316,15 @@ export function buildReportUrl(r: {
   tR(RT, 52, 8.5, when);
 
   const content = ops.join("\n");
-  const xobjs = imgs.map((_, i) => `/Im${i} ${7 + i} 0 R`).join(" ");
-  const pageRes = imgs.length
-    ? `<< /Font << /F1 4 0 R /F2 5 0 R >> /XObject << ${xobjs} >> >>`
-    : "<< /Font << /F1 4 0 R /F2 5 0 R >> >>";
+  // objects: 1 catalog, 2 pages, 3 page, 4 F1, 5 F2, 6 content, 7+ images
+  const IMG0 = 7;
+  const fonts = "/Font << /F1 4 0 R /F2 5 0 R >>";
+  const xobjs = imgs.map((_, i) => `/Im${i} ${IMG0 + i} 0 R`).join(" ");
+  const res1 = imgs.length ? `<< ${fonts} /XObject << ${xobjs} >> >>` : `<< ${fonts} >>`;
   const textObjs = [
     "<< /Type /Catalog /Pages 2 0 R >>",
     "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources ${pageRes} /Contents 6 0 R >>`,
+    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources ${res1} /Contents 6 0 R >>`,
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>",
     `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
@@ -312,12 +347,12 @@ export function buildReportUrl(r: {
     add(`${i + 1} 0 obj\n${body}\nendobj\n`);
   });
   imgs.forEach((im, i) => {
-    offsets[6 + i] = pos;
-    add(`${7 + i} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${im.w} /Height ${im.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${im.bytes.length} >>\nstream\n`);
+    offsets[textObjs.length + i] = pos;
+    add(`${IMG0 + i} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${im.w} /Height ${im.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${im.bytes.length} >>\nstream\n`);
     add(im.bytes);
     add("\nendstream\nendobj\n");
   });
-  const count = 6 + imgs.length;
+  const count = textObjs.length + imgs.length;
   const xrefStart = pos;
   add(`xref\n0 ${count + 1}\n0000000000 65535 f \n`);
   for (let i = 0; i < count; i++) add(`${offsets[i].toString().padStart(10, "0")} 00000 n \n`);

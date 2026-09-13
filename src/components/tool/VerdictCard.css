@@ -143,3 +143,25 @@
   color: var(--color-text-muted);
   border: 1px solid var(--color-border-strong);
 }
+
+/* Small phones: the 92px label column starves the bar — stack label above it */
+@media (max-width: 520px) {
+  .verdict-card__branch {
+    grid-template-columns: 1fr auto;
+    gap: var(--space-1) var(--space-3);
+  }
+  .verdict-card__branch-label {
+    grid-column: 1 / -1;
+  }
+  .verdict-card__branch-track {
+    grid-column: 1;
+  }
+  .verdict-card__branch-value,
+  .verdict-card__branch-soon {
+    grid-column: 2;
+  }
+  .verdict-card__top {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+}

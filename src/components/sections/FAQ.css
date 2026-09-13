@@ -57,3 +57,13 @@
   font-size: var(--text-sm);
   line-height: 1.65;
 }
+
+@media (max-width: 560px) {
+  .faq__question {
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--text-sm);
+  }
+  .faq__answer {
+    padding: 0 var(--space-4) var(--space-3);
+  }
+}

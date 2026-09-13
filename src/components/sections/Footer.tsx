@@ -11,21 +11,6 @@ const LINK_GROUPS = [
       { label: "FAQ", href: "/#faq" },
     ],
   },
-  {
-    title: "Resources",
-    links: [
-      { label: "Documentation", href: "#" },
-      { label: "Research", href: "#" },
-      { label: "API (coming soon)", href: "#" },
-    ],
-  },
-  {
-    title: "Contact",
-    links: [
-      { label: "GitHub", href: "#" },
-      { label: "Email", href: "#" },
-    ],
-  },
 ];
 
 export function Footer() {
@@ -38,20 +23,28 @@ export function Footer() {
             ECNet
           </div>
           <p className="footer__blurb">
-            ECNet is a research project exploring explainable
-            detection of AI-generated video. It analyzes whole frames for
-            the traces generators leave behind — and shows its evidence
-            instead of asking for blind trust.
+            ECNet is a research project exploring explainable detection of
+            AI-generated video. It analyzes whole frames for the traces
+            generators leave behind — and shows its evidence instead of asking
+            for blind trust.
           </p>
         </div>
 
         <div className="footer__links">
           {LINK_GROUPS.map((group) => (
-            <nav key={group.title} className="footer__group" aria-label={group.title}>
+            <nav
+              key={group.title}
+              className="footer__group"
+              aria-label={group.title}
+            >
               <span className="footer__group-title">{group.title}</span>
               {group.links.map((link) =>
                 link.href.startsWith("/") ? (
-                  <Link key={link.label} className="footer__link" to={link.href}>
+                  <Link
+                    key={link.label}
+                    className="footer__link"
+                    to={link.href}
+                  >
                     {link.label}
                   </Link>
                 ) : (
@@ -66,7 +59,10 @@ export function Footer() {
       </div>
 
       <div className="container footer__bottom">
-        <span>© {new Date().getFullYear()} ECNet. Research preview — results are illustrative.</span>
+        <span>
+          © {new Date().getFullYear()} ECNet. Research preview — results are
+          illustrative.
+        </span>
       </div>
     </footer>
   );

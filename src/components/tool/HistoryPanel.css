@@ -128,7 +128,9 @@
   display: grid;
   /* responsive card grid: multiple columns in a full-width panel,
      collapses to a single column in narrow containers */
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  /* min() so the 300px track can shrink below 300px on narrow phones
+     instead of forcing a horizontal scrollbar */
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
   gap: var(--space-3);
   padding: var(--space-4);
 }
@@ -337,4 +339,25 @@
 .hcard__delete:hover {
   color: var(--color-fake);
   background: var(--color-fake-bg);
+}
+
+@media (max-width: 480px) {
+  .history__list {
+    padding: var(--space-3);
+    gap: var(--space-2);
+  }
+  .history__head {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+}
+
+/* Touch devices have no hover: the delete control would be invisible and
+   unreachable, so always show it and give it a real tap target. */
+@media (hover: none) {
+  .hcard__delete {
+    opacity: 0.75;
+    width: 30px;
+    height: 30px;
+  }
 }

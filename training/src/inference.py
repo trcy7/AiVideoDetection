@@ -185,22 +185,23 @@ def _predict_hybrid(video_path: str | Path, model, cfg: dict, device: torch.devi
     temporal_probs: list[float] = []
     frequency_probs: list[float] = []
     motion_probs: list[float] = []
-    frame_probs: list[float] = []
-    frame_entries: list[dict] = []
+    frame_probs: dict[int, float] = {}     # keyed by source frame -> no double count
+    frame_entries: dict[int, dict] = {}    # ditto; overlapping tiles share frames
     # Every window feeds the SCORE (whole-clip coverage). GradCAM is per-frame and
     # costly, so run it (and emit heatmap frames) only on a capped, evenly-spaced
     # subset -- keeps long uploads responsive and the frames payload bounded.
-    max_cam_windows = int(icfg.get("max_cam_windows", 8))
+    # >=1: with zero CAM windows there'd be no heatmap and no per-frame probs,
+    # which would silently degrade confidence to "frames fully disagree"
+    max_cam_windows = max(1, int(icfg.get("max_cam_windows", 8)))
     if len(windows) > max_cam_windows:
         cam_windows = set(np.linspace(0, len(windows) - 1, max_cam_windows).round().astype(int).tolist())
     else:
         cam_windows = set(range(len(windows)))
 
-    out_index = 0
     for wi, window in enumerate(windows):
         do_cam = wi in cam_windows
         tensors = []
-        for _, time_sec, rgb in window:
+        for src_idx, time_sec, rgb in window:
             full_h, full_w = rgb.shape[:2]
             if box is not None:
                 t, b, l, r = box
@@ -211,7 +212,7 @@ def _predict_hybrid(video_path: str | Path, model, cfg: dict, device: torch.devi
             if not do_cam:
                 continue
             prob, cam = _gradcam(model, x)        # spatial branch: per-frame prob + CAM
-            frame_probs.append(prob)
+            frame_probs[int(src_idx)] = prob
             boxes = _cam_to_boxes(cam, float(icfg["cam_threshold"]), int(icfg["max_boxes"]))
             if box is not None:
                 t, b, l, r = box
@@ -221,8 +222,9 @@ def _predict_hybrid(video_path: str | Path, model, cfg: dict, device: torch.devi
                     bx["y"] = round(t / full_h + bx["y"] * ch, 4)
                     bx["w"] = round(bx["w"] * cw, 4)
                     bx["h"] = round(bx["h"] * ch, 4)
-            frame_entries.append({"index": out_index, "time": round(float(time_sec), 3), "boxes": boxes})
-            out_index += 1
+            # keyed by source frame: tiled windows can overlap, and the UI
+            # scrubber needs unique frames in ascending time
+            frame_entries[int(src_idx)] = {"time": round(float(time_sec), 3), "boxes": boxes}
         win_tensor = torch.stack(tensors).unsqueeze(0)   # (1, T, C, H, W)
         fused_p, spatial_p, temporal_p, freq_p, motion_p = _window_probs(model, win_tensor, use_tta)
         fused_probs.append(fused_p)
@@ -242,9 +244,14 @@ def _predict_hybrid(video_path: str | Path, model, cfg: dict, device: torch.devi
     else:
         verdict = "uncertain"
 
+    # ascending time + contiguous indices for the UI scrubber
+    ordered = [frame_entries[k] for k in sorted(frame_entries)]
+    frame_entries_out = [{"index": i, **e} for i, e in enumerate(ordered)]
+    frame_prob_values = [frame_probs[k] for k in sorted(frame_probs)]
+
     # confidence: distance from the fence (fused) + do the frames agree (spatial)
     margin = abs(mean_prob - 0.5) * 2.0
-    agreement = 1.0 - min(1.0, 2.0 * float(np.std(frame_probs)))
+    agreement = 1.0 - min(1.0, 2.0 * float(np.std(frame_prob_values)))
     confidence = round(min(99.0, max(5.0, 100.0 * (0.6 * margin + 0.4 * agreement))), 1)
 
     result = {
@@ -264,7 +271,7 @@ def _predict_hybrid(video_path: str | Path, model, cfg: dict, device: torch.devi
             "opticalFlow": round(float(np.mean(temporal_probs)) * 100.0, 1),
             "motion": round(float(np.mean(motion_probs)) * 100.0, 1) if motion_probs else None,
         },
-        "frames": frame_entries,
+        "frames": frame_entries_out,
     }
     validate_result(result, float(icfg["verdict_real_below"]), float(icfg["verdict_fake_above"]))
     return result

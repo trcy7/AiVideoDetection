@@ -7,7 +7,7 @@
 
 .footer__inner {
   display: grid;
-  grid-template-columns: minmax(240px, 1.2fr) 2fr;
+  grid-template-columns: minmax(260px, 2fr) minmax(160px, 1fr);
   gap: var(--space-6);
   padding-bottom: var(--space-6);
 }
@@ -36,7 +36,7 @@
 
 .footer__links {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: var(--space-4);
 }
 
@@ -78,6 +78,6 @@
     grid-template-columns: 1fr;
   }
   .footer__links {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   }
 }

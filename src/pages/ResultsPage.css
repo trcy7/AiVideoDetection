@@ -311,3 +311,25 @@
   justify-content: center;
   margin-top: var(--space-2);
 }
+
+@media (max-width: 560px) {
+  .rpage__topbar {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+  .rpage__title {
+    font-size: var(--text-xl);
+  }
+  .rpage__error-actions,
+  .rpage__actions {
+    width: 100%;
+  }
+  .rpage__error-actions .tool__cta,
+  .rpage__error-actions .tool__ghost {
+    width: 100%;
+  }
+  .scan__corners span {
+    width: 14px;
+    height: 14px;
+  }
+}

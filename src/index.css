@@ -127,8 +127,15 @@ h3 {
 
 img,
 canvas,
-video {
+video,
+svg {
   max-width: 100%;
+}
+
+/* long filenames / hashes must wrap rather than widen the page */
+.container,
+.glass-card {
+  overflow-wrap: anywhere;
 }
 
 :focus-visible {

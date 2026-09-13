@@ -5,6 +5,7 @@ import { ConfidenceGauge } from "./ConfidenceGauge";
 import { VerdictCard } from "./VerdictCard";
 import { HistoryPanel } from "./HistoryPanel";
 import { HeatmapViewer } from "./HeatmapViewer";
+import { FeedbackCard } from "./FeedbackCard";
 import "./ResultsView.css";
 
 interface ResultsViewProps {
@@ -91,6 +92,8 @@ export function ResultsView({
           </a>
         </div>
       </section>
+
+      <FeedbackCard analysisId={result.analysisId} />
 
       <div className="rview__history">
         <HistoryPanel

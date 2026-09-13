@@ -234,6 +234,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
             analyzedAt: new Date().toISOString(),
             processingMs,
             modelVersion: backend.modelVersion,
+            analysisId: backend.analysisId ?? null,
           } satisfies Omit<AnalysisResult, "reportUrl">;
           const res: AnalysisResult = { ...withoutReport, reportUrl: buildReportUrl(withoutReport) };
           setProgress(100);

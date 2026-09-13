@@ -235,19 +235,26 @@ def plan_windows_cover(total: int, window_len: int, frame_stride: int, max_windo
     """Tile the ENTIRE clip: back-to-back windows of window_len frames at
     frame_stride covering [0, total) with no gaps. If tiling needs more than
     max_windows, widen the stride so the whole clip still fits the budget."""
-    if total <= 0 or window_len < 1:
+    if total <= 0 or window_len < 1 or max_windows < 1:
         return []
     stride = max(1, int(frame_stride))
     while stride > 1 and (window_len - 1) * stride + 1 > total:
         stride -= 1                                      # short clip -> tighten the window
-    span = (window_len - 1) * stride + 1
+    span = (window_len - 1) * stride + 1                 # frames one window reaches across
     n = max(1, int(np.ceil(total / span)))
-    if n > max_windows:                                  # too long -> widen stride to fit the cap
-        stride = max(stride, int(np.ceil(total / (max_windows * window_len))))
+    if n > max_windows and window_len > 1:               # too long -> widen stride to fit the cap
+        need = total / max_windows                       # frames each window must span
+        stride = max(stride, int(np.ceil((need - 1) / (window_len - 1))))
         span = (window_len - 1) * stride + 1
         n = max(1, int(np.ceil(total / span)))
+    # Hard cap. window_len==1 can't widen its span, so it subsamples instead of
+    # covering -- full coverage is impossible there by construction.
+    n = min(n, max_windows)
     last_start = max(0, total - span)
-    starts = sorted({min(k * span, last_start) for k in range(n)})
+    # Even spacing over [0, last_start]. With n == ceil(total/span) the step is
+    # <= span, so the windows still tile the clip without gaps.
+    starts = (sorted({int(round(k * last_start / (n - 1))) for k in range(n)})
+              if n > 1 else [last_start // 2])
     return [[min(s + i * stride, total - 1) for i in range(window_len)] for s in starts]
 
 

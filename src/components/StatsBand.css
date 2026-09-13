@@ -45,3 +45,15 @@
     border-left: none;
   }
 }
+
+@media (max-width: 420px) {
+  .stats-band {
+    grid-template-columns: 1fr;
+  }
+  /* stacked: the column divider would read as a stray vertical line */
+  .stats-band__item + .stats-band__item {
+    border-left: none;
+    border-top: 1px solid var(--color-border);
+    padding-top: var(--space-4);
+  }
+}

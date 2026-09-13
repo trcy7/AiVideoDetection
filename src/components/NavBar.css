@@ -197,3 +197,15 @@
     display: flex;
   }
 }
+
+@media (max-width: 480px) {
+  .navbar__inner {
+    gap: var(--space-3);
+  }
+  .navbar__brand-name {
+    font-size: 1rem;
+  }
+  .navbar__mobile-link {
+    padding: var(--space-3);
+  }
+}

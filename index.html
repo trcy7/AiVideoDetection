@@ -2,9 +2,56 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ECNet</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- ==== SEO: replace SITE_URL below with your real domain after deploying ==== -->
+    <title>ECNet — AI-Generated Video Detection</title>
+    <meta
+      name="description"
+      content="ECNet detects fully AI-generated video. Upload a clip and get a verdict, a confidence score, and a frame-level heatmap showing exactly where the evidence is — using a hybrid EfficientNet-B4 + ConvLSTM model."
+    />
+    <meta name="author" content="ECNet" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://ecnet.example.com/" />
+    <meta name="theme-color" content="#0a0e15" />
+
+    <!-- Open Graph (link previews on Facebook, LinkedIn, Discord) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="ECNet" />
+    <meta property="og:title" content="ECNet — AI-Generated Video Detection" />
+    <meta
+      property="og:description"
+      content="Upload a video and find out if it was AI-generated. Verdict, confidence score, and a frame-level heatmap of the evidence."
+    />
+    <meta property="og:url" content="https://ecnet.example.com/" />
+    <meta property="og:image" content="https://ecnet.example.com/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+
+    <!-- Twitter/X card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="ECNet — AI-Generated Video Detection" />
+    <meta
+      name="twitter:description"
+      content="Upload a video and find out if it was AI-generated. Verdict, confidence, and a heatmap of the evidence."
+    />
+    <meta name="twitter:image" content="https://ecnet.example.com/og-image.png" />
+
+    <!-- Structured data: helps Google understand what this page is -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "ECNet",
+        "url": "https://ecnet.example.com/",
+        "applicationCategory": "MultimediaApplication",
+        "operatingSystem": "Any",
+        "description": "Detects fully AI-generated video using a hybrid EfficientNet-B4 and ConvLSTM model, returning a verdict, confidence score, and an explainable frame-level heatmap.",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
+
     <script>
       (function () {
         try {

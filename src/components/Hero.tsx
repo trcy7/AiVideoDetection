@@ -50,10 +50,10 @@ export function Hero() {
       <div className="container hero__inner">
         <div className="hero__content">
           <span className="hud-label hero__eyebrow">AI-generated video detection</span>
-          <h1 className="hero__title">
+          <h2 className="hero__title">
             See through synthetic video with{" "}
             <span className="hero__title-accent">ECNet</span>
-          </h1>
+          </h2>
           <p className="hero__lead">
             Video generators leave traces — sliding textures, morphing
             backgrounds, physics that doesn't hold. ECNet reads every frame and

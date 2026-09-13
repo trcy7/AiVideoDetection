@@ -18,6 +18,24 @@ export interface BackendAnalysis {
   branchScores: BranchScores;
   frames: HeatmapFrame[];
   modelVersion: string;
+  /** Audit-trail row id; null when the server runs without storage. */
+  analysisId?: string | null;
+}
+
+export type FeedbackLabel = "real" | "ai_generated" | "unsure";
+
+/** Report what the clip actually was, building a real-world labeled set. */
+export async function sendFeedback(
+  analysisId: string,
+  actualLabel: FeedbackLabel,
+  note?: string,
+): Promise<void> {
+  const res = await fetch(`${BACKEND_URL}/feedback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ analysisId, actualLabel, note }),
+  });
+  if (!res.ok) throw new Error(`Feedback failed (${res.status})`);
 }
 
 /** Older/stale servers appended the architecture to the label

@@ -143,3 +143,26 @@
   accent-color: var(--color-accent);
   min-height: 24px;
 }
+
+/* let the scrubber shrink instead of pushing the row wider than the card */
+.heatmap__field {
+  min-width: 0;
+}
+.heatmap__field input[type="range"] {
+  width: 100%;
+  min-width: 0;
+}
+
+@media (max-width: 520px) {
+  .heatmap__step {
+    width: 36px;
+    height: 36px;
+  }
+  .heatmap__row {
+    gap: var(--space-2);
+  }
+  .heatmap__frame-tag,
+  .heatmap__clean-tag {
+    font-size: 0.62rem;
+  }
+}

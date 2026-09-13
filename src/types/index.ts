@@ -69,6 +69,8 @@ export interface AnalysisResult {
   processingMs: number;
   modelVersion: string;
   reportUrl: string;
+  /** Server audit-trail id; enables ground-truth feedback. Absent for mock runs. */
+  analysisId?: string | null;
 }
 
 /** A persisted past analysis (localStorage). Blob URLs are rebuilt on restore. */

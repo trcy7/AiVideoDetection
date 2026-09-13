@@ -7,20 +7,31 @@ Frontend .env.local: VITE_USE_REAL_BACKEND=true, VITE_BACKEND_URL=http://localho
 from __future__ import annotations
 
 import argparse
+import hashlib
+import os
 import tempfile
+import time
 from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
+from . import db
 from .inference import Predictor
 
 app = FastAPI(title="ECNet local inference server")
 
-# allow any localhost port (Vite may pick 5173+); local-dev only
+# Dev: any localhost port (Vite may pick 5173+). Production: set
+# ECNET_ALLOWED_ORIGINS to a comma-separated list of deployed frontend origins,
+# e.g. ECNET_ALLOWED_ORIGINS="https://ecnet.example.com,https://www.ecnet.example.com"
+_ALLOWED = [o.strip().rstrip("/") for o in
+            os.getenv("ECNET_ALLOWED_ORIGINS", "").split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
+    allow_origins=_ALLOWED,
     allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
@@ -70,7 +81,8 @@ def health() -> dict:
     if pred is not None:
         icfg = pred.cfg["inference"]
         bands = {"realBelow": icfg.get("verdict_real_below"), "fakeAbove": icfg.get("verdict_fake_above")}
-    return {"status": "ok", "checkpoint": str(_state["checkpoint_path"]), "bands": bands}
+    return {"status": "ok", "checkpoint": str(_state["checkpoint_path"]), "bands": bands,
+            "storage": db.enabled()}
 
 
 @app.post("/analyze")
@@ -79,23 +91,55 @@ async def analyze(video: UploadFile = File(...)) -> dict:
     if predictor is None:
         raise HTTPException(500, "Server started without --checkpoint")
 
+    raw = await video.read()
+    # identify a repeat upload without ever storing the video itself
+    file_hash = hashlib.sha256(raw).hexdigest()
+
     suffix = Path(video.filename or "upload.mp4").suffix or ".mp4"
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-        tmp.write(await video.read())
+        tmp.write(raw)
         tmp_path = Path(tmp.name)
 
     analyze_path = _normalize_upload(tmp_path)   # HDR -> SDR when ffmpeg is present
+    started = time.perf_counter()
     try:
         result = predictor.predict(analyze_path)   # resident model -> no per-request reload
     except ValueError as e:
         raise HTTPException(422, f"Could not analyze video: {e}")
     finally:
-        tmp_path.unlink(missing_ok=True)
+        tmp_path.unlink(missing_ok=True)          # the upload never persists
         if analyze_path != tmp_path:
             analyze_path.unlink(missing_ok=True)
 
     result["modelVersion"] = _state["model_version"]
+    processing_ms = int((time.perf_counter() - started) * 1000)
+    # audit trail; analysisId lets the client attach ground-truth feedback later
+    result["analysisId"] = db.log_analysis(result, file_hash, processing_ms)
     return result
+
+
+class FeedbackIn(BaseModel):
+    analysisId: str
+    actualLabel: str          # "real" | "ai_generated" | "unsure"
+    note: str | None = None
+
+
+@app.post("/feedback")
+def feedback(body: FeedbackIn) -> dict:
+    """Ground truth for a past analysis -- builds a real-world labeled set."""
+    if not db.enabled():
+        raise HTTPException(503, "Feedback storage is disabled on this server")
+    if body.actualLabel not in db.LABELS:
+        raise HTTPException(422, f"actualLabel must be one of {db.LABELS}")
+    if not db.save_feedback(body.analysisId, body.actualLabel, body.note):
+        raise HTTPException(404, "Unknown analysisId")
+    return {"status": "ok"}
+
+
+@app.get("/stats")
+def stats() -> dict:
+    """Aggregate counts + accuracy measured against collected feedback."""
+    return db.stats()
 
 
 def main() -> None:
@@ -111,7 +155,13 @@ def main() -> None:
                         help="score below this = 'real' (overrides the checkpoint)")
     parser.add_argument("--fake-above", type=float, default=None,
                         help="score above this = 'AI' (overrides the checkpoint), e.g. 80")
+    parser.add_argument("--db", default="data/ecnet.db",
+                        help="SQLite file for the analysis audit trail + feedback")
+    parser.add_argument("--no-db", action="store_true", help="run without any storage")
     args = parser.parse_args()
+
+    if not args.no_db:
+        db.init(args.db)
 
     checkpoint_path = Path(args.checkpoint)
     if not checkpoint_path.exists():
@@ -132,6 +182,7 @@ def main() -> None:
     print(f"Model resident. Version label: {_state['model_version']}")
     print(f"Verdict bands: real < {icfg['verdict_real_below']} | uncertain | AI > {icfg['verdict_fake_above']}"
           + ("  (OVERRIDDEN via flags)" if (args.real_below is not None or args.fake_above is not None) else "  (from checkpoint)"))
+    print(f"Storage: {args.db}" if db.enabled() else "Storage: disabled (no audit trail / feedback)")
 
     import uvicorn
 

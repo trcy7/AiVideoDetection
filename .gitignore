@@ -38,3 +38,7 @@ training/outputs/
 training/models/ECNet-7.pt
 
 .claude/
+# SQLite audit trail / feedback store
+*.db
+*.db-wal
+*.db-shm
