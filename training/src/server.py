@@ -145,8 +145,10 @@ def stats() -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", required=True)
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8000)
+    # In a container the bind MUST be 0.0.0.0 or nothing outside can reach it;
+    # most PaaS also inject $PORT. Env-driven so Docker needs no custom CMD.
+    parser.add_argument("--host", default=os.getenv("ECNET_HOST", "127.0.0.1"))
+    parser.add_argument("--port", type=int, default=int(os.getenv("PORT", "8000")))
     # Live verdict-threshold overrides (0-100). When given, they OVERRIDE the
     # calibration baked into the checkpoint -- so you can re-point the "real"/"AI"
     # cutoffs without editing the .pt. Affects everything consistently: the
@@ -158,6 +160,12 @@ def main() -> None:
     parser.add_argument("--db", default="data/ecnet.db",
                         help="SQLite file for the analysis audit trail + feedback")
     parser.add_argument("--no-db", action="store_true", help="run without any storage")
+    # Inference cost knobs: fewer windows = faster, slightly less clip coverage.
+    # Essential on CPU-only hosts, where the default 48 is far too slow.
+    parser.add_argument("--max-score-windows", type=int, default=None,
+                        help="windows tiling the clip for scoring (default 48)")
+    parser.add_argument("--max-cam-windows", type=int, default=None,
+                        help="windows given per-frame GradCAM (default 8)")
     args = parser.parse_args()
 
     if not args.no_db:
@@ -178,11 +186,18 @@ def main() -> None:
         icfg["verdict_real_below"] = float(args.real_below)
     if args.fake_above is not None:
         icfg["verdict_fake_above"] = float(args.fake_above)
+    if args.max_score_windows is not None:
+        icfg["max_score_windows"] = max(1, int(args.max_score_windows))
+    if args.max_cam_windows is not None:
+        icfg["max_cam_windows"] = max(1, int(args.max_cam_windows))
     _state["predictor"] = predictor
     print(f"Model resident. Version label: {_state['model_version']}")
     print(f"Verdict bands: real < {icfg['verdict_real_below']} | uncertain | AI > {icfg['verdict_fake_above']}"
           + ("  (OVERRIDDEN via flags)" if (args.real_below is not None or args.fake_above is not None) else "  (from checkpoint)"))
     print(f"Storage: {args.db}" if db.enabled() else "Storage: disabled (no audit trail / feedback)")
+    print(f"Coverage: up to {icfg.get('max_score_windows', 48)} scoring windows, "
+          f"GradCAM on {icfg.get('max_cam_windows', 8)}")
+    print(f"Serving on http://{args.host}:{args.port}")
 
     import uvicorn
 

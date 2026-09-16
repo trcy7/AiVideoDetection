@@ -1,0 +1,17 @@
+# Serving only (src/server.py). Training extras (scikit-learn, matplotlib,
+# tqdm) are intentionally absent -- see requirements.txt for the full pipeline.
+# GPU: build with --build-arg TORCH_INDEX=https://download.pytorch.org/whl/cu121
+torch>=2.2
+torchvision>=0.17
+timm==1.0.11
+
+# headless: no GUI/X11 system libs needed in a container
+opencv-python-headless==4.10.0.84
+numpy>=1.26
+PyYAML==6.0.2
+pandas==2.2.3
+albumentations==1.4.18
+
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
