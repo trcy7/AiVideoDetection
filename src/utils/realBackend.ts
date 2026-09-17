@@ -3,7 +3,19 @@ import type { BranchScores, HeatmapFrame, Verdict } from "../types";
 /** Set VITE_USE_REAL_BACKEND=true in .env.local to call a real trained
  *  model (via training/src/server.py) instead of the built-in mock. */
 export const USE_REAL_BACKEND = import.meta.env.VITE_USE_REAL_BACKEND === "true";
-export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? "http://localhost:8000";
+export const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL ?? "http://localhost:8000")
+  .trim()
+  .replace(/\/+$/, "");
+
+/** A VITE_BACKEND_URL with no scheme is a RELATIVE path: the browser resolves it
+ *  against this site's own origin, the SPA rewrite in vercel.json turns it into
+ *  index.html, and static hosting answers POST with 405. That reads as a broken
+ *  backend when it is really a misconfigured env var, so name it precisely. */
+const BACKEND_URL_ERROR =
+  USE_REAL_BACKEND && !/^https?:\/\//i.test(BACKEND_URL)
+    ? `VITE_BACKEND_URL must be an absolute URL starting with https:// ` +
+      `(got "${BACKEND_URL}"). Set it in Vercel and redeploy.`
+    : null;
 
 /** ngrok's free tier answers anything browser-shaped with an HTML interstitial
  *  instead of the real response, and that reply carries no CORS headers -- so
@@ -38,6 +50,7 @@ export async function sendFeedback(
   actualLabel: FeedbackLabel,
   note?: string,
 ): Promise<void> {
+  if (BACKEND_URL_ERROR) throw new Error(BACKEND_URL_ERROR);
   const res = await fetch(`${BACKEND_URL}/feedback`, {
     method: "POST",
     headers: { ...BACKEND_HEADERS, "Content-Type": "application/json" },
@@ -54,6 +67,8 @@ export function cleanModelVersion(v: string): string {
 }
 
 export async function analyzeWithBackend(file: File): Promise<BackendAnalysis> {
+  if (BACKEND_URL_ERROR) throw new Error(BACKEND_URL_ERROR);
+
   const form = new FormData();
   form.append("video", file, file.name);
 
@@ -78,6 +93,12 @@ export async function analyzeWithBackend(file: File): Promise<BackendAnalysis> {
       detail = body.detail ?? detail;
     } catch {
       /* non-JSON error body — keep statusText */
+    }
+    if (res.status === 405) {
+      // Static hosts reject POST; the request never reached the backend.
+      detail =
+        `the request reached ${BACKEND_URL} but that host refuses POST. ` +
+        `This is usually VITE_BACKEND_URL pointing at the frontend instead of the API.`;
     }
     throw new Error(`Analysis failed (${res.status}): ${detail}`);
   }

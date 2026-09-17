@@ -25,7 +25,7 @@ app = FastAPI(title="ECNet local inference server")
 
 # Dev: any localhost port (Vite may pick 5173+). Production: set
 # ECNET_ALLOWED_ORIGINS to a comma-separated list of deployed frontend origins,
-# e.g. ECNET_ALLOWED_ORIGINS="https://ecnet.example.com,https://www.ecnet.example.com"
+# e.g. ECNET_ALLOWED_ORIGINS="https://ai-video-detection-five.vercel.app" (comma-separate several)
 _ALLOWED = [o.strip().rstrip("/") for o in
             os.getenv("ECNET_ALLOWED_ORIGINS", "").split(",") if o.strip()]
 

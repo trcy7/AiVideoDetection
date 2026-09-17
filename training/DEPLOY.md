@@ -101,7 +101,7 @@ it lives in the `ecnet-models` volume, so redeploys push code only.
 ## Deploy
 
 Set `ALLOWED_ORIGINS` at the top of `modal_app.py` to your deployed frontend
-origin first (it is still the repo-wide `https://ecnet.example.com` placeholder),
+origin first (it is still the repo-wide `https://ai-video-detection-five.vercel.app` placeholder),
 then:
 
 ```bash
@@ -171,7 +171,7 @@ redeploying code never risks either. A middleware in `modal_app.py` commits
 ```bash
 docker build -t ecnet .                    # add --build-arg TORCH_INDEX=.../cu121 for GPU
 docker run -p 8000:8000 \
-  -e ECNET_ALLOWED_ORIGINS=https://ecnet.example.com \
+  -e ECNET_ALLOWED_ORIGINS=https://ai-video-detection-five.vercel.app \
   -e ECNET_CHECKPOINT_URL=https://<direct-link-to>/ECNet-7.pt \
   -v ecnet-data:/data -v ecnet-models:/models \
   ecnet --max-score-windows 12 --max-cam-windows 4

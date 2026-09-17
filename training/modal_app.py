@@ -21,7 +21,7 @@ import modal
 # Origins allowed to call this API. The deployed frontend MUST be listed here
 # (comma-separate several); localhost is already allowed by a regex in server.py.
 # Still the repo-wide placeholder -- swap it with index.html/sitemap.xml at launch.
-ALLOWED_ORIGINS = "https://ai-video-detection-five.vercel.app/"
+ALLOWED_ORIGINS = "https://ai-video-detection-five.vercel.app"
 
 CHECKPOINT = "ECNet-7.pt"        # filename inside the ecnet-models volume
 MODELS_DIR = "/models"

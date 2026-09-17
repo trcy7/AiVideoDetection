@@ -310,7 +310,7 @@ For a deployed backend, point `VITE_BACKEND_URL` at the Modal URL instead. `VITE
 
 Backend env vars — all optional, the checkpoint path is still passed via `--checkpoint`:
 
-- `ECNET_ALLOWED_ORIGINS` — comma-separated origins allowed through CORS (e.g. `https://ecnet.example.com`). Required once the frontend is not on localhost.
+- `ECNET_ALLOWED_ORIGINS` — comma-separated origins allowed through CORS (e.g. `https://ai-video-detection-five.vercel.app`). Required once the frontend is not on localhost.
 - `ECNET_HOST` — bind address, default `127.0.0.1`. Must be `0.0.0.0` in a container.
 - `PORT` — bind port, default `8000`. Most PaaS inject this.
 

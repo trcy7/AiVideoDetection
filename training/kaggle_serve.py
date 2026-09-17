@@ -26,7 +26,7 @@ from typing import Optional
 
 DEFAULT_PORT = 8000
 # Must match the deployed frontend exactly (scheme + host, no trailing slash).
-DEFAULT_ORIGINS = "https://ecnet.example.com"
+DEFAULT_ORIGINS = "https://ai-video-detection-five.vercel.app"
 
 
 def _secret(name: str, default: Optional[str] = None) -> Optional[str]:
@@ -147,9 +147,23 @@ def serve(
     ckpt = find_checkpoint(checkpoint)
 
     # server.py reads this at IMPORT time, so it must be set before the import.
-    os.environ["ECNET_ALLOWED_ORIGINS"] = allowed_origins or _secret(
-        "ECNET_ALLOWED_ORIGINS", DEFAULT_ORIGINS
-    )
+    origins = allowed_origins or _secret("ECNET_ALLOWED_ORIGINS", DEFAULT_ORIGINS)
+    os.environ["ECNET_ALLOWED_ORIGINS"] = origins
+
+    # A re-run in the same kernel gets the CACHED module, whose CORS list was
+    # baked at first import. Changing ALLOWED_ORIGINS and re-running would then
+    # serve the OLD origins while printing the new ones -- a backend that looks
+    # healthy while the browser blocks every response. Refuse instead.
+    cached = sys.modules.get("src.server")
+    if cached is not None:
+        stale = [o for o in getattr(cached, "_ALLOWED", []) if o]
+        if stale != [o.strip().rstrip("/") for o in origins.split(",") if o.strip()]:
+            raise RuntimeError(
+                f"src.server is already imported with origins {stale}, but you "
+                f"asked for {origins!r}. Restart the kernel (Run -> Restart & "
+                f"Clear Cell Outputs), then Run All."
+            )
+
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from src.server import app, init_server
 
