@@ -17,9 +17,10 @@ import cv2
 import numpy as np
 import torch
 
-from .dataset import IMAGENET_MEAN, IMAGENET_STD
 from .model import ECNetModel, build_model
 from .utils import (
+    IMAGENET_MEAN,
+    IMAGENET_STD,
     common_content_box,
     get_device,
     load_checkpoint,

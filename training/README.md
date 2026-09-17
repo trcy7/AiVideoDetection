@@ -153,6 +153,16 @@ something is wired wrong.
 
 Training/eval loops only depend on `model(x) -> logit` and won't change.
 
+## Deploying the inference API
+
+See [DEPLOY.md](DEPLOY.md). Three paths, same API:
+
+- **Kaggle + static ngrok domain** ([`notebooks/kaggle_serve_ngrok.ipynb`](notebooks/kaggle_serve_ngrok.ipynb))
+  — free T4, and a reserved domain keeps the URL stable across dead sessions, so
+  the frontend is built once and never touched again.
+- **Modal** ([`modal_app.py`](modal_app.py)) — serverless GPU, scales to zero.
+- **Docker** ([`Dockerfile`](Dockerfile)) — portable to Fly/Render/Railway.
+
 ## Troubleshooting
 
 - **decord missing on Windows** → expected; OpenCV fallback is automatic.

@@ -142,6 +142,52 @@ def stats() -> dict:
     return db.stats()
 
 
+def init_server(
+    checkpoint: str | Path,
+    *,
+    db_path: Optional[str] = "data/ecnet.db",
+    real_below: Optional[float] = None,
+    fake_above: Optional[float] = None,
+    max_score_windows: Optional[int] = None,
+    max_cam_windows: Optional[int] = None,
+) -> None:
+    """Load storage + the model into module state. Shared by the CLI and Modal.
+
+    db_path=None runs with no audit trail / feedback.
+    """
+    if db_path:
+        db.init(db_path)
+
+    checkpoint_path = Path(checkpoint)
+    if not checkpoint_path.exists():
+        raise SystemExit(f"Checkpoint not found: {checkpoint_path}")
+
+    _state["checkpoint_path"] = checkpoint_path
+    _state["model_version"] = _model_version_label(checkpoint_path)
+    # Load the model ONCE here so it stays resident for every request, instead
+    # of reloading ~450 MB of weights on each /analyze. First analysis is warm.
+    print(f"Loading checkpoint: {checkpoint_path} ...")
+    predictor = Predictor(checkpoint_path)
+    icfg = predictor.cfg["inference"]
+    if real_below is not None:
+        icfg["verdict_real_below"] = float(real_below)
+    if fake_above is not None:
+        icfg["verdict_fake_above"] = float(fake_above)
+    if max_score_windows is not None:
+        icfg["max_score_windows"] = max(1, int(max_score_windows))
+    if max_cam_windows is not None:
+        icfg["max_cam_windows"] = max(1, int(max_cam_windows))
+    _state["predictor"] = predictor
+
+    overridden = real_below is not None or fake_above is not None
+    print(f"Model resident. Version label: {_state['model_version']}")
+    print(f"Verdict bands: real < {icfg['verdict_real_below']} | uncertain | AI > {icfg['verdict_fake_above']}"
+          + ("  (OVERRIDDEN via flags)" if overridden else "  (from checkpoint)"))
+    print(f"Storage: {db_path}" if db.enabled() else "Storage: disabled (no audit trail / feedback)")
+    print(f"Coverage: up to {icfg.get('max_score_windows', 48)} scoring windows, "
+          f"GradCAM on {icfg.get('max_cam_windows', 8)}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", required=True)
@@ -168,35 +214,14 @@ def main() -> None:
                         help="windows given per-frame GradCAM (default 8)")
     args = parser.parse_args()
 
-    if not args.no_db:
-        db.init(args.db)
-
-    checkpoint_path = Path(args.checkpoint)
-    if not checkpoint_path.exists():
-        raise SystemExit(f"Checkpoint not found: {checkpoint_path}")
-
-    _state["checkpoint_path"] = checkpoint_path
-    _state["model_version"] = _model_version_label(checkpoint_path)
-    # Load the model ONCE here so it stays resident for every request, instead
-    # of reloading ~450 MB of weights on each /analyze. First analysis is warm.
-    print(f"Loading checkpoint: {checkpoint_path} ...")
-    predictor = Predictor(checkpoint_path)
-    icfg = predictor.cfg["inference"]
-    if args.real_below is not None:
-        icfg["verdict_real_below"] = float(args.real_below)
-    if args.fake_above is not None:
-        icfg["verdict_fake_above"] = float(args.fake_above)
-    if args.max_score_windows is not None:
-        icfg["max_score_windows"] = max(1, int(args.max_score_windows))
-    if args.max_cam_windows is not None:
-        icfg["max_cam_windows"] = max(1, int(args.max_cam_windows))
-    _state["predictor"] = predictor
-    print(f"Model resident. Version label: {_state['model_version']}")
-    print(f"Verdict bands: real < {icfg['verdict_real_below']} | uncertain | AI > {icfg['verdict_fake_above']}"
-          + ("  (OVERRIDDEN via flags)" if (args.real_below is not None or args.fake_above is not None) else "  (from checkpoint)"))
-    print(f"Storage: {args.db}" if db.enabled() else "Storage: disabled (no audit trail / feedback)")
-    print(f"Coverage: up to {icfg.get('max_score_windows', 48)} scoring windows, "
-          f"GradCAM on {icfg.get('max_cam_windows', 8)}")
+    init_server(
+        args.checkpoint,
+        db_path=None if args.no_db else args.db,
+        real_below=args.real_below,
+        fake_above=args.fake_above,
+        max_score_windows=args.max_score_windows,
+        max_cam_windows=args.max_cam_windows,
+    )
     print(f"Serving on http://{args.host}:{args.port}")
 
     import uvicorn

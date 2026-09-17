@@ -194,11 +194,12 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 
 ## 13. Backend API
 
-Base URL: `http://localhost:8000`
+Base URL: `http://localhost:8000` locally, or the Modal URL in production
+(see [`training/DEPLOY.md`](training/DEPLOY.md)).
 
 - **`GET /health`** — returns `{"status":"ok","checkpoint":"<path>"}`; confirms the server is up and which checkpoint is loaded.
 - **`POST /analyze`** — multipart form field `video` (the uploaded file). Returns the analysis JSON (see §17). Errors: `422` if the video can't be decoded, `500` if the server was started without `--checkpoint`.
-- **CORS:** allows any `http://localhost:<port>` and `http://127.0.0.1:<port>` origin (local dev only).
+- **CORS:** any `http://localhost:<port>` / `http://127.0.0.1:<port>` origin is always allowed for dev. Deployed frontends must be listed in `ECNET_ALLOWED_ORIGINS`.
 
 ---
 
@@ -305,7 +306,15 @@ VITE_BACKEND_URL=http://localhost:8000
 - `VITE_USE_REAL_BACKEND` — `true` calls the real model server; unset/false uses the built-in mock.
 - `VITE_BACKEND_URL` — where the FastAPI server is listening (default `http://localhost:8000`).
 
-Backend needs **no** environment variables — the checkpoint path is passed on the command line (`--checkpoint`).
+For a deployed backend, point `VITE_BACKEND_URL` at the Modal URL instead. `VITE_*` values are baked in at build time, so changing them needs a rebuild.
+
+Backend env vars — all optional, the checkpoint path is still passed via `--checkpoint`:
+
+- `ECNET_ALLOWED_ORIGINS` — comma-separated origins allowed through CORS (e.g. `https://ecnet.example.com`). Required once the frontend is not on localhost.
+- `ECNET_HOST` — bind address, default `127.0.0.1`. Must be `0.0.0.0` in a container.
+- `PORT` — bind port, default `8000`. Most PaaS inject this.
+
+On Modal these are set for you by `modal_app.py`.
 
 ---
 

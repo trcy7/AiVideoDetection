@@ -21,8 +21,7 @@ import torch
 from albumentations.pytorch import ToTensorV2
 from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
 
-IMAGENET_MEAN = (0.485, 0.456, 0.406)
-IMAGENET_STD = (0.229, 0.224, 0.225)
+from .utils import IMAGENET_MEAN, IMAGENET_STD
 
 
 class RandomOverlay(A.ImageOnlyTransform):

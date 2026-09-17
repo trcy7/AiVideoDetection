@@ -5,6 +5,14 @@ import type { BranchScores, HeatmapFrame, Verdict } from "../types";
 export const USE_REAL_BACKEND = import.meta.env.VITE_USE_REAL_BACKEND === "true";
 export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? "http://localhost:8000";
 
+/** ngrok's free tier answers anything browser-shaped with an HTML interstitial
+ *  instead of the real response, and that reply carries no CORS headers -- so
+ *  it surfaces as an opaque network failure, not a readable error. This header
+ *  opts out of it. Inert against any non-ngrok backend, so it is sent always. */
+const BACKEND_HEADERS: Record<string, string> = {
+  "ngrok-skip-browser-warning": "true",
+};
+
 /** Shape returned by POST /analyze — matches inference.py's contract
  *  plus the server-added modelVersion label. */
 export interface BackendAnalysis {
@@ -32,7 +40,7 @@ export async function sendFeedback(
 ): Promise<void> {
   const res = await fetch(`${BACKEND_URL}/feedback`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { ...BACKEND_HEADERS, "Content-Type": "application/json" },
     body: JSON.stringify({ analysisId, actualLabel, note }),
   });
   if (!res.ok) throw new Error(`Feedback failed (${res.status})`);
@@ -51,11 +59,15 @@ export async function analyzeWithBackend(file: File): Promise<BackendAnalysis> {
 
   let res: Response;
   try {
-    res = await fetch(`${BACKEND_URL}/analyze`, { method: "POST", body: form });
+    res = await fetch(`${BACKEND_URL}/analyze`, {
+      method: "POST",
+      body: form,
+      headers: BACKEND_HEADERS,
+    });
   } catch {
     throw new Error(
-      `Can't reach the inference server at ${BACKEND_URL}. Is it running? ` +
-        `(python -m src.server --checkpoint <path> from training/)`,
+      `Can't reach the inference server at ${BACKEND_URL}. ` +
+        `The backend session may have ended -- restart it and try again.`,
     );
   }
 
