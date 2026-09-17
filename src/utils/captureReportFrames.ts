@@ -94,22 +94,25 @@ export function captureReportFrames(
       const next = () => {
         if (i >= picks.length) return finish();
         const pick = picks[i];
-        video.addEventListener(
-          "seeked",
-          () => {
-            try {
-              ctx.drawImage(video, 0, 0, cw, ch);
-              drawBoxes(ctx, pick.frame.boxes, cw, ch);
-              out.push({ dataUrl: canvas.toDataURL("image/jpeg", 0.75), caption: pick.caption });
-            } catch {
-              /* skip this frame */
-            }
-            i++;
-            next();
-          },
-          { once: true },
-        );
-        video.currentTime = pick.frame.time;
+        const draw = () => {
+          try {
+            ctx.drawImage(video, 0, 0, cw, ch);
+            drawBoxes(ctx, pick.frame.boxes, cw, ch);
+            out.push({ dataUrl: canvas.toDataURL("image/jpeg", 0.75), caption: pick.caption });
+          } catch {
+            /* skip this frame */
+          }
+          i++;
+          next();
+        };
+        // Seeking to where we already are fires no "seeked", and a target at or
+        // past the end may never fire either -- both stall the chain until the
+        // timeout, returning no images at all. Clamp, then short-circuit.
+        const end = video.duration && isFinite(video.duration) ? video.duration - 0.05 : undefined;
+        const target = Math.max(0, end !== undefined ? Math.min(pick.frame.time, end) : pick.frame.time);
+        if (Math.abs(video.currentTime - target) < 0.01) return draw();
+        video.addEventListener("seeked", draw, { once: true });
+        video.currentTime = target;
       };
       next();
     }, { once: true });

@@ -16,7 +16,7 @@ const FAQS: Array<{ q: string; a: string }> = [
   },
   {
     q: "Is my video uploaded to a server?",
-    a: "In this preview build, nothing leaves your browser — file inspection, metadata, and the mock analysis all run locally. When the detection backend launches, videos will be processed server-side and deleted after analysis; the privacy policy will spell out retention exactly.",
+    a: "Yes — the clip is sent to the ECNet inference server, analysed, and deleted as soon as the analysis finishes; it is never written to permanent storage. What is kept is the verdict metadata and a SHA-256 hash of the file, so a repeat scan can be recognised without retaining the video itself. File inspection and metadata still run locally in your browser.",
   },
   {
     q: "Why does the heatmap matter if I already have a verdict?",

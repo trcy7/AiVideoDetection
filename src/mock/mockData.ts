@@ -256,10 +256,9 @@ export function buildReportUrl(r: {
     y -= 21;
   }
 
-  // branch scores as bars, colored by zone (Motion hidden, like the results page)
-  const realBelow = r.bands?.realBelow ?? 35;
-  const fakeAbove = r.bands?.fakeAbove ?? 65;
-  const zoneColor = (v: number) => ZONE[v < realBelow ? "real" : v <= fakeAbove ? "uncertain" : "fake"];
+  // branch scores as bars, coloured by the VERDICT so the report matches the
+  // results page exactly (Motion hidden there too)
+  const barColor = ZONE[r.verdict];
   y -= 16;
   fill(MUT); t(L, y, 9, "BRANCH SCORES", true); y -= 24;
   const barX = L + 170, barW = RT - (L + 170) - 42;
@@ -271,7 +270,7 @@ export function buildReportUrl(r: {
     if (val === null) continue;
     fill(INK); t(L, y, 10.5, label);
     fill(TRACK); box(barX, y - 1, barW, 7);
-    fill(zoneColor(val)); box(barX, y - 1, (barW * val) / 100, 7);
+    fill(barColor); box(barX, y - 1, (barW * val) / 100, 7);
     fill(INK); tR(RT, y, 10, val.toFixed(1), true);
     y -= 23;
   }

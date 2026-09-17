@@ -165,11 +165,13 @@ export function HeatmapViewer({ frames, videoUrl, thumbnail }: HeatmapViewerProp
   useEffect(() => {
     const video = videoRef.current;
     if (!video || decode !== "ok" || !frame) return;
-    if (Math.abs(video.currentTime - frame.time) < 0.01) {
+    const end = video.duration && isFinite(video.duration) ? video.duration - 0.05 : undefined;
+    const target = Math.max(0, end !== undefined ? Math.min(frame.time, end) : frame.time);
+    if (Math.abs(video.currentTime - target) < 0.01) {
       drawCurrentFrame();
       return;
     }
-    video.currentTime = frame.time;
+    video.currentTime = target;
   }, [frame, decode, drawCurrentFrame]);
 
   const step = (delta: number) => {

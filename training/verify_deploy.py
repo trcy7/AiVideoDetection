@@ -158,9 +158,20 @@ def check_frontend(frontend: str, backend: str) -> None:
         js += fetch(chunk)
     print(f"         inspected {len(seen)} JS file(s)")
 
+    # Search for the FULL url, not just the host: a scheme-less
+    # VITE_BACKEND_URL contains the host too, so a host-only match passes while
+    # the browser treats the value as a relative path and POSTs hit 405.
     host = backend.split("://")[-1].rstrip("/")
-    check(host in js, "bundle contains the backend URL",
-          hint="Vercel built without VITE_BACKEND_URL -- set it and REDEPLOY")
+    if backend in js:
+        check(True, "bundle contains the backend URL")
+    elif host in js:
+        check(False, "bundle contains the backend URL",
+              f"found bare host {host!r}, not {backend!r}",
+              hint="VITE_BACKEND_URL is missing the https:// scheme -- the "
+                   "browser resolves it relative to the site, so POSTs hit 405")
+    else:
+        check(False, "bundle contains the backend URL",
+              hint="Vercel built without VITE_BACKEND_URL -- set it and REDEPLOY")
     check("localhost:8000" not in js, "bundle has no localhost fallback baked in",
           hint="the build fell back to the default; the env var was not applied")
     check("ngrok-skip-browser-warning" in js, "bundle sends the ngrok skip header",

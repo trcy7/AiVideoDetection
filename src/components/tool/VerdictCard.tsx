@@ -14,12 +14,6 @@ const VERDICT_COPY: Record<Verdict, { label: string; description: string }> = {
 /** Color a branch bar with the SAME calibrated bands the verdict uses, so a
  *  score of 80 reads "uncertain" (not "fake") when the checkpoint's fake
  *  threshold is 94. Falls back to 35/65 for mock/older results without bands. */
-function zoneFor(score: number, realBelow = 35, fakeAbove = 65): Verdict {
-  if (score < realBelow) return "real";
-  if (score <= fakeAbove) return "uncertain";
-  return "fake";
-}
-
 function VerdictIcon({ verdict }: { verdict: Verdict }) {
   if (verdict === "real") {
     return (
@@ -93,7 +87,10 @@ export function VerdictCard({ result }: VerdictCardProps) {
               </div>
             );
           }
-          const zone = zoneFor(branch.value, result.bands?.realBelow, result.bands?.fakeAbove);
+          // Bars take the VERDICT's colour, not each branch's own zone: a "real"
+          // call reads green throughout, so the evidence never looks like it
+          // contradicts the headline.
+          const zone = result.verdict;
           return (
             <div key={branch.label} className="verdict-card__branch">
               <span className="verdict-card__branch-label">{branch.label}</span>

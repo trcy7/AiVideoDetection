@@ -60,8 +60,8 @@ export function Footer() {
 
       <div className="container footer__bottom">
         <span>
-          © {new Date().getFullYear()} ECNet. Research preview — results are
-          illustrative.
+          © {new Date().getFullYear()} ECNet. Detection results are
+          probabilistic — evidence for review, not proof.
         </span>
       </div>
     </footer>
