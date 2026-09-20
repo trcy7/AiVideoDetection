@@ -31,6 +31,11 @@ export interface HeatmapFrame {
   /** Timestamp in the source video, seconds. */
   time: number;
   boxes: HeatmapBox[];
+  /** Downscaled JPEG data-URL of this frame, rendered server-side. Present on
+   *  a capped subset. When set the viewer draws it directly, which is the only
+   *  option for link analyses (no local file) and avoids depending on the
+   *  browser decoding the upload. */
+  image?: string;
 }
 
 /** A rendered still for the PDF report: a JPEG data-URL (GradCAM baked in) with

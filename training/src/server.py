@@ -8,11 +8,15 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import ipaddress
 import os
+import shutil
+import socket
 import tempfile
 import time
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -85,12 +89,117 @@ def health() -> dict:
             "storage": db.enabled()}
 
 
-@app.post("/analyze")
-async def analyze(video: UploadFile = File(...)) -> dict:
+MAX_URL_SECONDS = 60          # only the first minute is fetched and scored
+MAX_URL_BYTES = 200_000_000
+
+
+def _analyze_path(path: Path, file_hash: str) -> dict:
+    """Score one local file. Shared by /analyze and /analyze-url."""
     predictor: Optional[Predictor] = _state["predictor"]
     if predictor is None:
         raise HTTPException(500, "Server started without --checkpoint")
 
+    analyze_path = _normalize_upload(path)       # HDR -> SDR when ffmpeg is present
+    started = time.perf_counter()
+    try:
+        result = predictor.predict(analyze_path)  # resident model -> no per-request reload
+    except ValueError as e:
+        raise HTTPException(422, f"Could not analyze video: {e}")
+    finally:
+        if analyze_path != path:
+            analyze_path.unlink(missing_ok=True)
+
+    result["modelVersion"] = _state["model_version"]
+    processing_ms = int((time.perf_counter() - started) * 1000)
+    # audit trail; analysisId lets the client attach ground-truth feedback later
+    result["analysisId"] = db.log_analysis(result, file_hash, processing_ms)
+    return result
+
+
+def _reject_internal_host(url: str) -> None:
+    """The server fetches whatever the client pastes, so refuse anything that
+    resolves inside the network -- otherwise this is an SSRF hole into the
+    host's own metadata and admin endpoints."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise HTTPException(422, "Only http(s) links are supported")
+    try:
+        infos = socket.getaddrinfo(parsed.hostname, None)
+    except OSError:
+        raise HTTPException(422, f"Could not resolve {parsed.hostname}")
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            raise HTTPException(422, "That host is not publicly routable")
+
+
+def _download_clip(url: str) -> tuple[Path, Path, str, bool]:
+    """Fetch the first MAX_URL_SECONDS of a public video link via yt-dlp.
+    Returns (tempdir, file, title) -- the caller removes the tempdir."""
+    try:
+        import yt_dlp
+    except ImportError:
+        raise HTTPException(503, "Link analysis is unavailable (yt-dlp not installed)")
+
+    _reject_internal_host(url)
+    tmpdir = Path(tempfile.mkdtemp(prefix="ecnet_url_"))
+    opts = {
+        # cap the resolution: the model runs at 380px, so a 4K pull is wasted bytes
+        "format": "best[height<=720][ext=mp4]/best[ext=mp4]/best",
+        "outtmpl": str(tmpdir / "clip.%(ext)s"),
+        "noplaylist": True,
+        "quiet": True,
+        "no_warnings": True,
+        "noprogress": True,
+        "max_filesize": MAX_URL_BYTES,
+        "socket_timeout": 30,
+    }
+    # Section download is an ffmpeg feature. Without it we still cap bytes, but
+    # the whole clip gets scored rather than just the first minute -- say so in
+    # the response instead of pretending the limit held.
+    trimmed = shutil.which("ffmpeg") is not None
+    if trimmed:
+        opts["download_ranges"] = yt_dlp.utils.download_range_func(
+            None, [(0, MAX_URL_SECONDS)])
+        opts["force_keyframes_at_cuts"] = True
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+    except Exception as e:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+        # yt-dlp messages name the real cause (private, geo-blocked, login wall)
+        raise HTTPException(422, f"Could not fetch that link: {str(e)[:200]}")
+
+    files = [f for f in tmpdir.iterdir() if f.is_file() and f.stat().st_size > 10_000]
+    if not files:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+        raise HTTPException(422, "That link produced no downloadable video")
+    title = (info or {}).get("title") or "link"
+    return tmpdir, max(files, key=lambda f: f.stat().st_size), title, trimmed
+
+
+class AnalyzeUrlIn(BaseModel):
+    url: str
+
+
+@app.post("/analyze-url")
+def analyze_url(body: AnalyzeUrlIn) -> dict:
+    """Analyze a public video link (YouTube/TikTok/Instagram/Facebook/direct).
+    Only the first minute is fetched; the file is deleted after scoring."""
+    tmpdir, path, title, trimmed = _download_clip(body.url.strip())
+    try:
+        file_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+        result = _analyze_path(path, file_hash)
+        result["fileName"] = f"{title[:80]}{path.suffix}"
+        result["sourceUrl"] = body.url.strip()
+        result["truncatedToSeconds"] = MAX_URL_SECONDS if trimmed else None
+        return result
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)   # the download never persists
+
+
+@app.post("/analyze")
+async def analyze(video: UploadFile = File(...)) -> dict:
     raw = await video.read()
     # identify a repeat upload without ever storing the video itself
     file_hash = hashlib.sha256(raw).hexdigest()
@@ -99,23 +208,10 @@ async def analyze(video: UploadFile = File(...)) -> dict:
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(raw)
         tmp_path = Path(tmp.name)
-
-    analyze_path = _normalize_upload(tmp_path)   # HDR -> SDR when ffmpeg is present
-    started = time.perf_counter()
     try:
-        result = predictor.predict(analyze_path)   # resident model -> no per-request reload
-    except ValueError as e:
-        raise HTTPException(422, f"Could not analyze video: {e}")
+        return _analyze_path(tmp_path, file_hash)
     finally:
-        tmp_path.unlink(missing_ok=True)          # the upload never persists
-        if analyze_path != tmp_path:
-            analyze_path.unlink(missing_ok=True)
-
-    result["modelVersion"] = _state["model_version"]
-    processing_ms = int((time.perf_counter() - started) * 1000)
-    # audit trail; analysisId lets the client attach ground-truth feedback later
-    result["analysisId"] = db.log_analysis(result, file_hash, processing_ms)
-    return result
+        tmp_path.unlink(missing_ok=True)            # the upload never persists
 
 
 class FeedbackIn(BaseModel):

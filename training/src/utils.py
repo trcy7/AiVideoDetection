@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import random
 import sys
 from pathlib import Path
@@ -235,10 +236,38 @@ def plan_windows(total: int, window_len: int, n_windows: int, frame_stride: int)
     return [[min(s + i * stride, total - 1) for i in range(window_len)] for s in starts]
 
 
+def _plan_windows_cover_legacy(total: int, window_len: int, frame_stride: int,
+                               max_windows: int) -> list[list[int]]:
+    """The window plan as it was at 07fd8d9 (2026-08-03) -- the code ECNet-7 was
+    calibrated against. Kept verbatim so the shipped bands can be A/B'd against
+    the sampling they were actually fitted to. Enable with ECNET_LEGACY_WINDOWS=1.
+
+    Differs from the current planner in two ways: the stride-widening divisor
+    (max_windows * window_len, vs spanning total/max_windows frames), and start
+    placement (k*span clamped to last_start, vs even spacing over the clip).
+    """
+    if total <= 0 or window_len < 1:
+        return []
+    stride = max(1, int(frame_stride))
+    while stride > 1 and (window_len - 1) * stride + 1 > total:
+        stride -= 1
+    span = (window_len - 1) * stride + 1
+    n = max(1, int(np.ceil(total / span)))
+    if n > max_windows:
+        stride = max(stride, int(np.ceil(total / (max_windows * window_len))))
+        span = (window_len - 1) * stride + 1
+        n = max(1, int(np.ceil(total / span)))
+    last_start = max(0, total - span)
+    starts = sorted({min(k * span, last_start) for k in range(n)})
+    return [[min(s + i * stride, total - 1) for i in range(window_len)] for s in starts]
+
+
 def plan_windows_cover(total: int, window_len: int, frame_stride: int, max_windows: int) -> list[list[int]]:
     """Tile the ENTIRE clip: back-to-back windows of window_len frames at
     frame_stride covering [0, total) with no gaps. If tiling needs more than
     max_windows, widen the stride so the whole clip still fits the budget."""
+    if os.getenv("ECNET_LEGACY_WINDOWS") == "1":
+        return _plan_windows_cover_legacy(total, window_len, frame_stride, max_windows)
     if total <= 0 or window_len < 1 or max_windows < 1:
         return []
     stride = max(1, int(frame_stride))

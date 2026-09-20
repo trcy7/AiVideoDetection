@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { USE_REAL_BACKEND } from "../../utils/realBackend";
 import { useAnalysis } from "../../context/AnalysisContext";
@@ -44,6 +45,7 @@ export function UploadSection() {
   const sectionRef = useReveal<HTMLElement>();
   const navigate = useNavigate();
   const a = useAnalysis();
+  const [link, setLink] = useState("");
 
   const inFlight = a.phase === "preprocessing" || a.phase === "analyzing";
 
@@ -75,7 +77,65 @@ export function UploadSection() {
         </div>
 
         <div className="tool__body">
-          {a.phase === "idle" && <UploadDropzone onFileAccepted={a.acceptFile} />}
+          {a.phase === "idle" && (
+            <>
+              <UploadDropzone onFileAccepted={a.acceptFile} />
+              {USE_REAL_BACKEND && (
+                <form
+                  className="tool__link"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const v = link.trim();
+                    if (v) a.acceptUrl(v);
+                  }}
+                >
+                  <label className="tool__link-label" htmlFor="clip-url">
+                    or paste a link — YouTube, TikTok, Facebook
+                  </label>
+                  <div className="tool__link-row">
+                    <input
+                      id="clip-url"
+                      type="url"
+                      inputMode="url"
+                      className="tool__link-input"
+                      placeholder="https://..."
+                      value={link}
+                      onChange={(e) => setLink(e.target.value)}
+                    />
+                    <button type="submit" className="tool__link-go" disabled={!link.trim()}>
+                      Fetch
+                    </button>
+                  </div>
+                  <p className="tool__link-note">
+                    Only the first minute is fetched and scored. Instagram needs a
+                    login, so its links won&apos;t work.
+                  </p>
+                </form>
+              )}
+            </>
+          )}
+
+          {a.phase === "ready" && !a.file && a.sourceUrl && (
+            <>
+              {a.analysisError && (
+                <p className="tool__error" role="alert">
+                  Analysis failed: {a.analysisError}
+                </p>
+              )}
+              <p className="tool__link-ready">
+                Ready to fetch and analyze:<br />
+                <span className="tool__link-url">{a.sourceUrl}</span>
+              </p>
+              <div className="tool__actions">
+                <button type="button" className="tool__cta" onClick={runAnalysis}>
+                  {a.analysisError ? "Try again" : "Run analysis"}
+                </button>
+                <button type="button" className="tool__ghost" onClick={a.reset}>
+                  Use a different link
+                </button>
+              </div>
+            </>
+          )}
 
           {a.phase === "ready" && a.file && (
             <>

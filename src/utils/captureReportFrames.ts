@@ -53,6 +53,41 @@ function drawBoxes(ctx: CanvasRenderingContext2D, boxes: HeatmapBox[], cw: numbe
   }
 }
 
+/** Report stills built from the server-rendered frames, with GradCAM boxes
+ *  drawn on. Needs no video, so it works for link analyses and for uploads the
+ *  browser can't decode -- the two cases where the video path returns nothing. */
+export function reportFramesFromStills(
+  frames: HeatmapFrame[],
+  count = 2,
+): Promise<ReportFrame[]> {
+  const picks = pickFrames(frames.filter((f) => f.image), count);
+  if (!picks.length) return Promise.resolve([]);
+
+  return Promise.all(
+    picks.map(
+      ({ frame, caption }) =>
+        new Promise<ReportFrame | null>((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            const scale = Math.min(1, FRAME_WIDTH / (img.naturalWidth || FRAME_WIDTH));
+            const cw = Math.max(1, Math.round(img.naturalWidth * scale));
+            const ch = Math.max(1, Math.round(img.naturalHeight * scale));
+            const canvas = document.createElement("canvas");
+            canvas.width = cw;
+            canvas.height = ch;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) return resolve(null);
+            ctx.drawImage(img, 0, 0, cw, ch);
+            drawBoxes(ctx, frame.boxes, cw, ch);
+            resolve({ dataUrl: canvas.toDataURL("image/jpeg", 0.75), caption });
+          };
+          img.onerror = () => resolve(null);
+          img.src = frame.image as string;
+        }),
+    ),
+  ).then((r) => r.filter((x): x is ReportFrame => x !== null));
+}
+
 /** Renders up to `count` report stills from a video: seeks to the chosen frames,
  *  draws the GradCAM boxes onto each, and returns them as JPEG data-URLs.
  *  Resolves to [] on any failure — the report just omits the images. */

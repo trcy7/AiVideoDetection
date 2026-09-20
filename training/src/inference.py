@@ -10,6 +10,7 @@ Usage: python -m src.inference --video x.mp4 --checkpoint models/ECNet-7.pt --ou
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 from pathlib import Path
 
@@ -53,6 +54,24 @@ def _gradcam(model: ECNetModel, x: torch.Tensor) -> tuple[float, np.ndarray]:
     return prob, cam
 
 
+def _frame_jpeg(rgb: np.ndarray, longest: int, quality: int = 70) -> str:
+    """Downscaled JPEG data-URL of a FULL frame (box coords are full-frame).
+
+    Bounds the LONGEST edge, not the width -- capping width alone leaves
+    portrait frames tall (480x853) and roughly triples the payload.
+    """
+    h, w = rgb.shape[:2]
+    if max(h, w) > longest:
+        scale = longest / max(h, w)
+        rgb = cv2.resize(rgb, (max(1, round(w * scale)), max(1, round(h * scale))),
+                         interpolation=cv2.INTER_AREA)
+    ok, buf = cv2.imencode(".jpg", cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR),
+                           [int(cv2.IMWRITE_JPEG_QUALITY), quality])
+    if not ok:
+        return ""
+    return "data:image/jpeg;base64," + base64.b64encode(buf.tobytes()).decode("ascii")
+
+
 def _cam_to_boxes(
     cam: np.ndarray,
     threshold: float,
@@ -94,6 +113,11 @@ _INFERENCE_DEFAULTS = {
     "verdict_real_below": 35,
     "verdict_fake_above": 65,
     "tta": False,              # off by default: calibration was fit without TTA
+    # Heatmap stills baked into the response. Without them the UI can only draw
+    # the heatmap by re-decoding the video client-side, which is impossible for
+    # link analyses and unreliable for uploads. Bounded so the payload stays small.
+    "max_frame_images": 12,
+    "frame_image_size": 480,   # longest edge of each still
 }
 
 
@@ -194,16 +218,26 @@ def _predict_hybrid(video_path: str | Path, model, cfg: dict, device: torch.devi
     # >=1: with zero CAM windows there'd be no heatmap and no per-frame probs,
     # which would silently degrade confidence to "frames fully disagree"
     max_cam_windows = max(1, int(icfg.get("max_cam_windows", 8)))
+    img_size = int(icfg.get("frame_image_size", 480) or 0)
+    max_images = int(icfg.get("max_frame_images", 12) or 0)
     if len(windows) > max_cam_windows:
         cam_windows = set(np.linspace(0, len(windows) - 1, max_cam_windows).round().astype(int).tolist())
     else:
         cam_windows = set(range(len(windows)))
+
+    # Encode only the stills we intend to keep. Encoding every CAM frame and
+    # discarding most of them costs ~128 JPEGs per video, which is pure waste
+    # on batch evaluations that never look at the images.
+    cam_frame_total = len(cam_windows) * int(ecfg.get("window_len", 16))
+    img_every = (-(-cam_frame_total // max_images)) if (img_size and max_images) else 0
+    cam_seen = 0
 
     for wi, window in enumerate(windows):
         do_cam = wi in cam_windows
         tensors = []
         for src_idx, time_sec, rgb in window:
             full_h, full_w = rgb.shape[:2]
+            full_rgb = rgb                       # keep the uncropped frame for the still
             if box is not None:
                 t, b, l, r = box
                 rgb = rgb[t:b, l:r]
@@ -225,7 +259,11 @@ def _predict_hybrid(video_path: str | Path, model, cfg: dict, device: torch.devi
                     bx["h"] = round(bx["h"] * ch, 4)
             # keyed by source frame: tiled windows can overlap, and the UI
             # scrubber needs unique frames in ascending time
-            frame_entries[int(src_idx)] = {"time": round(float(time_sec), 3), "boxes": boxes}
+            entry = {"time": round(float(time_sec), 3), "boxes": boxes}
+            if img_every and cam_seen % img_every == 0:
+                entry["image"] = _frame_jpeg(full_rgb, img_size)
+            cam_seen += 1
+            frame_entries[int(src_idx)] = entry
         win_tensor = torch.stack(tensors).unsqueeze(0)   # (1, T, C, H, W)
         fused_p, spatial_p, temporal_p, freq_p, motion_p = _window_probs(model, win_tensor, use_tta)
         fused_probs.append(fused_p)
@@ -248,6 +286,16 @@ def _predict_hybrid(video_path: str | Path, model, cfg: dict, device: torch.devi
     # ascending time + contiguous indices for the UI scrubber
     ordered = [frame_entries[k] for k in sorted(frame_entries)]
     frame_entries_out = [{"index": i, **e} for i, e in enumerate(ordered)]
+    # Safety net on payload size. Thin the frames that actually carry a still --
+    # selecting evenly-spaced FRAME indices would miss where stills landed and
+    # strip nearly all of them.
+    imaged = [i for i, e in enumerate(frame_entries_out) if e.get("image")]
+    if max_images and len(imaged) > max_images:
+        keep = {imaged[j] for j in np.linspace(0, len(imaged) - 1, max_images)
+                .round().astype(int).tolist()}
+        for i in imaged:
+            if i not in keep:
+                frame_entries_out[i].pop("image", None)
     frame_prob_values = [frame_probs[k] for k in sorted(frame_probs)]
 
     # confidence: distance from the fence (fused) + do the frames agree (spatial)

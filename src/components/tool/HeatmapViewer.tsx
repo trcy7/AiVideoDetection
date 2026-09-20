@@ -27,7 +27,11 @@ export function HeatmapViewer({ frames, videoUrl, thumbnail }: HeatmapViewerProp
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
 
-  const frame = frames[frameIndex];
+  // Server-rendered stills are authoritative when present: they always draw,
+  // whereas the video path needs the browser to decode the source. Older
+  // results carry no stills, so those still scrub over every frame.
+  const viewFrames = frames.some((f) => f.image) ? frames.filter((f) => f.image) : frames;
+  const frame = viewFrames[Math.min(frameIndex, viewFrames.length - 1)];
 
   const updateFit = useCallback(() => {
     const stage = stageRef.current;
@@ -49,6 +53,20 @@ export function HeatmapViewer({ frames, videoUrl, thumbnail }: HeatmapViewerProp
     const observer = new ResizeObserver(updateFit);
     observer.observe(stage);
     return () => observer.disconnect();
+  }, [updateFit]);
+
+  // Paint the server-rendered still for this frame.
+  const drawFrameImage = useCallback((src: string) => {
+    const img = new Image();
+    img.onload = () => {
+      const c = canvasRef.current;
+      if (!c) return;
+      c.width = img.naturalWidth || 640;
+      c.height = img.naturalHeight || 360;
+      c.getContext("2d")?.drawImage(img, 0, 0, c.width, c.height);
+      updateFit();
+    };
+    img.src = src;
   }, [updateFit]);
 
   const drawCurrentFrame = useCallback(() => {
@@ -156,13 +174,17 @@ export function HeatmapViewer({ frames, videoUrl, thumbnail }: HeatmapViewerProp
   // No decodable video -> show the saved still (boxes still overlay it), or
   // the wireframe placeholder if there's no thumbnail either.
   useEffect(() => {
-    if (decode !== "error") return;
+    if (decode !== "error" || frame?.image) return;   // a still already covers it
     if (!drawThumbnail()) drawPlaceholder();
-  }, [decode, drawThumbnail, drawPlaceholder]);
+  }, [decode, drawThumbnail, drawPlaceholder, frame]);
 
   // Seek the hidden video to the selected frame's timestamp; the `seeked`
   // event fires once the frame is decoded and ready to paint.
   useEffect(() => {
+    if (frame?.image) {
+      drawFrameImage(frame.image);
+      return;
+    }
     const video = videoRef.current;
     if (!video || decode !== "ok" || !frame) return;
     const end = video.duration && isFinite(video.duration) ? video.duration - 0.05 : undefined;
@@ -172,10 +194,10 @@ export function HeatmapViewer({ frames, videoUrl, thumbnail }: HeatmapViewerProp
       return;
     }
     video.currentTime = target;
-  }, [frame, decode, drawCurrentFrame]);
+  }, [frame, decode, drawCurrentFrame, drawFrameImage]);
 
   const step = (delta: number) => {
-    setFrameIndex((i) => Math.min(frames.length - 1, Math.max(0, i + delta)));
+    setFrameIndex((i) => Math.min(viewFrames.length - 1, Math.max(0, i + delta)));
   };
 
   return (
@@ -210,7 +232,7 @@ export function HeatmapViewer({ frames, videoUrl, thumbnail }: HeatmapViewerProp
             ref={canvasRef}
             className="heatmap__canvas"
             role="img"
-            aria-label={`Video frame ${frame.index + 1} of ${frames.length} with ${frame.boxes.length} suspicious region${frame.boxes.length === 1 ? "" : "s"} highlighted`}
+            aria-label={`Video frame ${frame.index + 1} of ${viewFrames.length} with ${frame.boxes.length} suspicious region${frame.boxes.length === 1 ? "" : "s"} highlighted`}
           />
           <div
             className="heatmap__overlay"
@@ -232,7 +254,7 @@ export function HeatmapViewer({ frames, videoUrl, thumbnail }: HeatmapViewerProp
             ))}
           </div>
           <span className="heatmap__frame-tag">
-            Frame {frame.index + 1} / {frames.length} · {frame.time.toFixed(2)}s
+            Frame {frameIndex + 1} / {viewFrames.length} · {frame.time.toFixed(2)}s
           </span>
           {frame.boxes.length === 0 && (
             <span className="heatmap__clean-tag">No suspicious regions on this frame</span>
@@ -253,12 +275,12 @@ export function HeatmapViewer({ frames, videoUrl, thumbnail }: HeatmapViewerProp
           </button>
           <label className="heatmap__field">
             <span className="heatmap__field-label">
-              Frame <strong>{frameIndex + 1}</strong> / {frames.length}
+              Frame <strong>{frameIndex + 1}</strong> / {viewFrames.length}
             </span>
             <input
               type="range"
               min={0}
-              max={frames.length - 1}
+              max={viewFrames.length - 1}
               step={1}
               value={frameIndex}
               onChange={(e) => setFrameIndex(Number(e.target.value))}
@@ -269,7 +291,7 @@ export function HeatmapViewer({ frames, videoUrl, thumbnail }: HeatmapViewerProp
             type="button"
             className="heatmap__step"
             onClick={() => step(1)}
-            disabled={frameIndex === frames.length - 1}
+            disabled={frameIndex === viewFrames.length - 1}
             aria-label="Next frame"
           >
             ›

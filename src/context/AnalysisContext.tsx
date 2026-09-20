@@ -17,10 +17,10 @@ import {
 import { extractVideoMetadata } from "../utils/videoMetadata";
 import { captureThumbnail } from "../utils/captureThumbnail";
 import { buildReportUrl, generateMockResult } from "../mock/mockData";
-import { captureReportFrames } from "../utils/captureReportFrames";
+import { captureReportFrames, reportFramesFromStills } from "../utils/captureReportFrames";
 import { useAnalysisHistory } from "../hooks/useAnalysisHistory";
 import { PREPROCESS_STEPS } from "../components/tool/ProcessingStatus";
-import { USE_REAL_BACKEND, analyzeWithBackend } from "../utils/realBackend";
+import { USE_REAL_BACKEND, analyzeWithBackend, analyzeUrlWithBackend } from "../utils/realBackend";
 import { putVideo, getVideo, deleteVideo, clearVideos, pruneVideos } from "../utils/videoStore";
 
 /**
@@ -65,6 +65,9 @@ interface AnalysisContextValue {
   display: ResultDisplay | null;
   history: HistoryItem[];
   acceptFile: (file: File) => void;
+  /** Analyze a pasted link instead of a local file (no video preview). */
+  acceptUrl: (url: string) => void;
+  sourceUrl: string | null;
   startAnalysis: () => void;
   reset: () => void;
   selectHistory: (item: HistoryItem) => void;
@@ -79,6 +82,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [file, setFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [metadata, setMetadata] = useState<VideoMetadata>(EMPTY_METADATA);
   const [preprocessStep, setPreprocessStep] = useState(0);
   const [progress, setProgress] = useState(0);
@@ -101,6 +105,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     backendRequestStarted.current = false;
     setAnalysisError(null);
     setFile(accepted);
+    setSourceUrl(null);
     setMetadata(EMPTY_METADATA);
     setResult(null);
     setThumbnail(null);
@@ -115,6 +120,29 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     metadataCleanup.current = extractVideoMetadata(accepted, (patch) =>
       setMetadata((m) => ({ ...m, ...patch })),
     );
+  }, []);
+
+  /** Same reset as acceptFile, but the source is a link: no File, no object
+   *  URL, so the heatmap falls back to its placeholder (nothing to draw). */
+  const acceptUrl = useCallback((url: string) => {
+    metadataCleanup.current?.();
+    metadataCleanup.current = null;
+    savedToHistory.current = false;
+    backendRequestStarted.current = false;
+    setAnalysisError(null);
+    setFile(null);
+    setVideoUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setMetadata(EMPTY_METADATA);
+    setResult(null);
+    setThumbnail(null);
+    setSelectedHistory(null);
+    setProgress(0);
+    setPreprocessStep(0);
+    setSourceUrl(url);
+    setPhase("ready");
   }, []);
 
   const reset = useCallback(() => {
@@ -191,9 +219,12 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         if (blob) void putVideo(item.id, blob);
       });
 
-      // richer report: top flagged frames with GradCAM, swapped in once rendered
-      if (url) {
-        captureReportFrames(url, res.frames, 2)
+      // richer report: top flagged frames with GradCAM, swapped in once rendered.
+      // Server stills win when present -- they always render, while the video
+      // path needs the browser to decode the source and yields nothing for links.
+      const stills = res.frames.some((f) => f.image);
+      if (stills || url) {
+        (stills ? reportFramesFromStills(res.frames, 2) : captureReportFrames(url as string, res.frames, 2))
           .then((rf) => {
             if (!rf.length) return;
             const { reportUrl: prev, ...rest } = res;
@@ -215,11 +246,11 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   // (file + metadata stay loaded) so the user can retry without re-uploading.
   useEffect(() => {
     if (phase !== "analyzing" || !USE_REAL_BACKEND) return;
-    if (!file) return;
+    if (!file && !sourceUrl) return;
 
     if (!backendRequestStarted.current) {
       backendRequestStarted.current = true;
-      analyzeWithBackend(file)
+      (file ? analyzeWithBackend(file) : analyzeUrlWithBackend(sourceUrl as string))
         .then((backend) => {
           const processingMs = Math.round(performance.now() - analysisStartedAt.current);
           const withoutReport = {
@@ -238,7 +269,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
           } satisfies Omit<AnalysisResult, "reportUrl">;
           const res: AnalysisResult = { ...withoutReport, reportUrl: buildReportUrl(withoutReport) };
           setProgress(100);
-          finishAnalysis(res, file.size);
+          finishAnalysis(res, file?.size ?? 0);
         })
         .catch((err: unknown) => {
           setAnalysisError(err instanceof Error ? err.message : "Analysis failed.");
@@ -256,7 +287,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       );
       return () => clearTimeout(timer);
     }
-  }, [phase, progress, file, finishAnalysis]);
+  }, [phase, progress, file, sourceUrl, finishAnalysis]);
 
   // Analyzing (MOCK, default): fixed-duration animated progress, then
   // produce a mock result and persist it.
@@ -400,6 +431,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     phase,
     file,
     videoUrl,
+    sourceUrl,
+    acceptUrl,
     metadata,
     preprocessStep,
     progress,

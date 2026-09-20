@@ -66,6 +66,40 @@ export function cleanModelVersion(v: string): string {
   return v.split("·")[0].trim() || v;
 }
 
+/** Analyze a public video link. The server fetches at most the first minute,
+ *  scores it, and deletes the download -- nothing is uploaded from here. */
+export async function analyzeUrlWithBackend(url: string): Promise<BackendAnalysis> {
+  if (BACKEND_URL_ERROR) throw new Error(BACKEND_URL_ERROR);
+
+  let res: Response;
+  try {
+    res = await fetch(`${BACKEND_URL}/analyze-url`, {
+      method: "POST",
+      headers: { ...BACKEND_HEADERS, "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+  } catch {
+    throw new Error(
+      `Can't reach the inference server at ${BACKEND_URL}. ` +
+        `The backend session may have ended -- restart it and try again.`,
+    );
+  }
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      detail = (await res.json()).detail ?? detail;
+    } catch {
+      /* non-JSON error body */
+    }
+    throw new Error(detail);
+  }
+  const data = (await res.json()) as BackendAnalysis;
+  if (typeof data.modelVersion === "string") {
+    data.modelVersion = cleanModelVersion(data.modelVersion);
+  }
+  return data;
+}
+
 export async function analyzeWithBackend(file: File): Promise<BackendAnalysis> {
   if (BACKEND_URL_ERROR) throw new Error(BACKEND_URL_ERROR);
 
