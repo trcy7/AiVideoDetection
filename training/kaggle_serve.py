@@ -109,12 +109,17 @@ def _wait_for_local(port: int, timeout: float = 300.0) -> None:
     raise TimeoutError(f"Server did not become healthy within {timeout:.0f}s")
 
 
-def _verify_public(url: str) -> None:
-    """Prove the *public* path returns JSON, not ngrok's HTML interstitial.
+def _verify_public(url: str, attempts: int = 8, delay: float = 5.0) -> bool:
+    """Check that the PUBLIC url returns JSON, not ngrok's HTML interstitial.
 
     The free tier serves that interstitial to anything it thinks is a browser,
     and it arrives without CORS headers -- so the frontend sees an opaque
     network failure. The skip header is what the frontend sends too.
+
+    Retries because ngrok.connect() returns once the agent registers, which is
+    before the edge reliably serves -- the first probe often 404s with
+    ERR_NGROK_3200. Never raises: a failed check must not tear down a server
+    that is actually running.
     """
     import json
     import urllib.request
@@ -122,12 +127,24 @@ def _verify_public(url: str) -> None:
     req = urllib.request.Request(
         f"{url}/health", headers={"ngrok-skip-browser-warning": "true"}
     )
-    with urllib.request.urlopen(req, timeout=30) as r:
-        body = r.read().decode()
-    payload = json.loads(body)  # raises if the interstitial came back instead
-    if payload.get("bands") is None:
-        raise RuntimeError(f"Server up but no model loaded: {payload}")
-    print(f"   verified through ngrok: {payload}")
+    last = "no attempt made"
+    for i in range(attempts):
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                payload = json.loads(r.read().decode())
+            if payload.get("bands") is None:
+                last = f"server up but no model loaded: {payload}"
+            else:
+                print(f"   verified through ngrok: {payload}")
+                return True
+        except Exception as e:
+            last = f"{type(e).__name__}: {str(e)[:80]}"
+        if i < attempts - 1:
+            print(f"   edge not ready ({last}) -- retry in {delay:.0f}s", flush=True)
+            time.sleep(delay)
+    print(f"   WARNING: could not verify the public URL -- {last}")
+    print("   The local server IS running; serving anyway.")
+    return False
 
 
 def serve(
@@ -186,9 +203,9 @@ def serve(
     url = open_tunnel(port)
 
     print("4/4 verifying public URL ...")
-    _verify_public(url)
+    verified = _verify_public(url)
 
-    print(f"\n{'=' * 62}\n  LIVE: {url}\n  CORS: {os.environ['ECNET_ALLOWED_ORIGINS']}"
+    print(f"\n{'=' * 62}\n  {'LIVE' if verified else 'SERVING (unverified)'}: {url}\n  CORS: {os.environ['ECNET_ALLOWED_ORIGINS']}"
           f"\n  Audit trail: {db_path} (lost when the session ends)"
           f"\n{'=' * 62}\n  Leave this cell running. Interrupt it to stop.\n")
 

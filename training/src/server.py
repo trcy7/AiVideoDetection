@@ -144,8 +144,13 @@ def _download_clip(url: str) -> tuple[Path, Path, str, bool]:
     _reject_internal_host(url)
     tmpdir = Path(tempfile.mkdtemp(prefix="ecnet_url_"))
     opts = {
-        # cap the resolution: the model runs at 380px, so a 4K pull is wasted bytes
-        "format": "best[height<=720][ext=mp4]/best[ext=mp4]/best",
+        # Video-only by preference: the model never looks at audio, so this
+        # avoids a merge step and halves the download. YouTube serves DASH
+        # streams, where a COMBINED mp4 above 360p often does not exist at all --
+        # asking for one is what makes it fail with "format is not available".
+        # Resolution capped because the model runs at 380px.
+        "format": ("bv*[height<=720][ext=mp4]/bv*[height<=720]/bv*"
+                   "/b[height<=720][ext=mp4]/b[height<=720]/b"),
         "outtmpl": str(tmpdir / "clip.%(ext)s"),
         "noplaylist": True,
         "quiet": True,
