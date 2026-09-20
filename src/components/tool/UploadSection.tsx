@@ -162,12 +162,12 @@ export function UploadSection() {
             </>
           )}
 
-          {inFlight && a.file && (
+          {inFlight && (a.file || a.sourceUrl) && (
             <div className="tool__inflight glass-card" role="status">
               <span className="tool__inflight-pulse" aria-hidden="true" />
               <div className="tool__inflight-text">
                 <strong>Analysis in progress</strong>
-                <span>{a.file.name}</span>
+                <span>{a.file ? a.file.name : a.sourceUrl}</span>
               </div>
               <button
                 type="button"

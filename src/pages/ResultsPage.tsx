@@ -31,11 +31,13 @@ export function ResultsPage() {
           <span className="hud-label rpage__crumb">Forensic report</span>
         </div>
 
-        {inFlight && a.file && (
+        {inFlight && (a.file || a.sourceUrl) && (
           <div className="rpage__scanning">
             <div className="rpage__scanning-head">
               <h1 className="rpage__title">Scanning video</h1>
-              <p className="rpage__subtitle rpage__filename">{a.file.name}</p>
+              <p className="rpage__subtitle rpage__filename">
+                {a.file ? a.file.name : a.sourceUrl}
+              </p>
             </div>
 
             <div className="scan">
