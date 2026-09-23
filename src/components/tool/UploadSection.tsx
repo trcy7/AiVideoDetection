@@ -81,36 +81,99 @@ export function UploadSection() {
             <>
               <UploadDropzone onFileAccepted={a.acceptFile} />
               {USE_REAL_BACKEND && (
-                <form
-                  className="tool__link"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    const v = link.trim();
-                    if (v) a.acceptUrl(v);
-                  }}
-                >
-                  <label className="tool__link-label" htmlFor="clip-url">
-                    or paste a link — YouTube, TikTok, Facebook
-                  </label>
-                  <div className="tool__link-row">
-                    <input
-                      id="clip-url"
-                      type="url"
-                      inputMode="url"
-                      className="tool__link-input"
-                      placeholder="https://..."
-                      value={link}
-                      onChange={(e) => setLink(e.target.value)}
-                    />
-                    <button type="submit" className="tool__link-go" disabled={!link.trim()}>
-                      Fetch
-                    </button>
+                <>
+                  <div className="linksep" role="separator" aria-label="or">
+                    <span>or</span>
                   </div>
-                  <p className="tool__link-note">
-                    Only the first minute is fetched and scored. Instagram needs a
-                    login, so its links won&apos;t work.
-                  </p>
-                </form>
+
+                  <form
+                    className="linkcard"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const v = link.trim();
+                      if (v) a.acceptUrl(v);
+                    }}
+                  >
+                    <div className="linkcard__head">
+                      <span className="linkcard__badge" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" width="20" height="20">
+                          <path
+                            d="M9.5 14.5l5-5M10.8 7.4l1.6-1.6a3.6 3.6 0 115.1 5.1l-1.6 1.6M13.2 16.6l-1.6 1.6a3.6 3.6 0 11-5.1-5.1l1.6-1.6"
+                            stroke="currentColor"
+                            strokeWidth="1.7"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                      </span>
+                      <div className="linkcard__heading">
+                        <h3 className="linkcard__title">Analyse from a link</h3>
+                        <p className="linkcard__sub">
+                          Paste a public video URL — nothing uploads from your device.
+                        </p>
+                      </div>
+                      <span className="linkcard__limit">First 60s</span>
+                    </div>
+
+                    <div className="linkcard__row">
+                      <div className="linkcard__field">
+                        <svg
+                          className="linkcard__fieldicon"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          aria-hidden="true"
+                        >
+                          <circle cx="12" cy="12" r="8.4" stroke="currentColor" strokeWidth="1.5" />
+                          <path
+                            d="M3.8 12h16.4M12 3.6c2.1 2.3 3.2 5.3 3.2 8.4s-1.1 6.1-3.2 8.4c-2.1-2.3-3.2-5.3-3.2-8.4S9.9 5.9 12 3.6z"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                          />
+                        </svg>
+                        <input
+                          id="clip-url"
+                          type="url"
+                          inputMode="url"
+                          autoComplete="off"
+                          spellCheck={false}
+                          className="linkcard__input"
+                          placeholder="https://www.tiktok.com/@user/video/..."
+                          aria-label="Public video URL"
+                          value={link}
+                          onChange={(e) => setLink(e.target.value)}
+                        />
+                        {link && (
+                          <button
+                            type="button"
+                            className="linkcard__clear"
+                            onClick={() => setLink("")}
+                            aria-label="Clear link"
+                          >
+                            <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
+                              <path
+                                d="M4 4l8 8M12 4l-8 8"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                strokeLinecap="round"
+                              />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                      <button type="submit" className="linkcard__go" disabled={!link.trim()}>
+                        Fetch &amp; analyse
+                      </button>
+                    </div>
+
+                    <ul className="linkcard__chips">
+                      <li className="linkchip">YouTube</li>
+                      <li className="linkchip">TikTok</li>
+                      <li className="linkchip">Facebook</li>
+                      <li className="linkchip is-off" title="Instagram requires a login">
+                        Instagram
+                      </li>
+                    </ul>
+                  </form>
+                </>
               )}
             </>
           )}
