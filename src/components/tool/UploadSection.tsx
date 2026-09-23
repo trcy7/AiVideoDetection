@@ -8,36 +8,6 @@ import { MetadataPanel } from "./MetadataPanel";
 import { HistoryPanel } from "./HistoryPanel";
 import "./UploadSection.css";
 
-const TRUST = [
-  {
-    label: "Up to 1 minute",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.6" />
-        <path d="M12 7.5V12l3 2.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    ),
-  },
-  {
-    label: "Every second analyzed",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="1.6" />
-        <path d="M8 5v14M16 5v14" stroke="currentColor" strokeWidth="1.6" />
-      </svg>
-    ),
-  },
-  {
-    label: "Frame-level heatmap",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-        <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.6" />
-      </svg>
-    ),
-  },
-];
-
 /** Landing-page upload tool — the first screen. Running an analysis hands off
  *  to /results; the state machine lives in AnalysisContext, so the scan keeps
  *  going through the navigation. */
@@ -157,15 +127,6 @@ export function UploadSection() {
                         Analyze
                       </button>
                     </div>
-
-                    <ul className="linkcard__chips">
-                      <li className="linkchip">YouTube</li>
-                      <li className="linkchip">TikTok</li>
-                      <li className="linkchip">Facebook</li>
-                      <li className="linkchip is-off" title="Instagram requires a login">
-                        Instagram
-                      </li>
-                    </ul>
                   </form>
                 </>
               )}
@@ -262,17 +223,6 @@ export function UploadSection() {
             </div>
           )}
         </div>
-
-        {a.phase === "idle" && (
-          <ul className="tool__trust" aria-label="What you get">
-            {TRUST.map((item) => (
-              <li key={item.label} className="tool__trust-item">
-                <span className="tool__trust-icon" aria-hidden="true">{item.icon}</span>
-                {item.label}
-              </li>
-            ))}
-          </ul>
-        )}
 
         {a.phase === "idle" && a.history.length > 0 && (
           <div className="tool__history">
