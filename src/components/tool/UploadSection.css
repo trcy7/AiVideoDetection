@@ -323,7 +323,7 @@
 
 .linkcard__head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--space-3);
 }
 
@@ -331,20 +331,12 @@
   display: grid;
   place-items: center;
   flex: none;
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   border-radius: var(--radius-md);
   background: var(--gradient-brand);
   color: var(--color-accent-contrast);
   box-shadow: 0 0 18px var(--glow-accent);
-}
-
-.linkcard__heading {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  flex: 1;
 }
 
 .linkcard__title {
@@ -353,26 +345,6 @@
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--color-text);
-}
-
-.linkcard__sub {
-  margin: 0;
-  font-size: var(--text-sm);
-  color: var(--color-text-muted);
-  line-height: 1.45;
-}
-
-.linkcard__limit {
-  flex: none;
-  align-self: center;
-  padding: 3px 9px;
-  border-radius: 999px;
-  border: 1px solid var(--color-border);
-  background: var(--color-surface-sunken);
-  color: var(--color-text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  white-space: nowrap;
 }
 
 .linkcard__row {
@@ -522,9 +494,6 @@
   }
   .linkcard__go {
     width: 100%;
-  }
-  .linkcard__limit {
-    display: none;                  /* the chips already carry the constraint */
   }
 }
 

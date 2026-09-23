@@ -105,13 +105,7 @@ export function UploadSection() {
                           />
                         </svg>
                       </span>
-                      <div className="linkcard__heading">
-                        <h3 className="linkcard__title">Analyse from a link</h3>
-                        <p className="linkcard__sub">
-                          Paste a public video URL — nothing uploads from your device.
-                        </p>
-                      </div>
-                      <span className="linkcard__limit">First 60s</span>
+                      <h3 className="linkcard__title">Analyze from a link</h3>
                     </div>
 
                     <div className="linkcard__row">
@@ -136,7 +130,7 @@ export function UploadSection() {
                           autoComplete="off"
                           spellCheck={false}
                           className="linkcard__input"
-                          placeholder="https://www.tiktok.com/@user/video/..."
+                          placeholder="https://..."
                           aria-label="Public video URL"
                           value={link}
                           onChange={(e) => setLink(e.target.value)}
@@ -160,7 +154,7 @@ export function UploadSection() {
                         )}
                       </div>
                       <button type="submit" className="linkcard__go" disabled={!link.trim()}>
-                        Fetch &amp; analyse
+                        Analyze
                       </button>
                     </div>
 
