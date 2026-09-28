@@ -65,8 +65,8 @@ interface AnalysisContextValue {
   display: ResultDisplay | null;
   history: HistoryItem[];
   acceptFile: (file: File) => void;
-  /** Analyze a pasted link instead of a local file (no video preview). */
-  acceptUrl: (url: string) => void;
+  /** Analyze a pasted link instead of a local file; starts immediately. */
+  analyzeUrl: (url: string) => void;
   sourceUrl: string | null;
   startAnalysis: () => void;
   reset: () => void;
@@ -123,8 +123,14 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   }, []);
 
   /** Same reset as acceptFile, but the source is a link: no File, no object
-   *  URL, so the heatmap falls back to its placeholder (nothing to draw). */
-  const acceptUrl = useCallback((url: string) => {
+   *  URL, so the heatmap falls back to its placeholder (nothing to draw).
+   *
+   *  Goes STRAIGHT to preprocessing rather than parking at "ready". A dropped
+   *  file has metadata worth confirming -- duration, resolution, a thumbnail --
+   *  but a link has none of that yet, so the confirm step would show only the
+   *  URL the user just typed and ask them to click again. On failure the flow
+   *  still falls back to "ready", which is where the retry lives. */
+  const analyzeUrl = useCallback((url: string) => {
     metadataCleanup.current?.();
     metadataCleanup.current = null;
     savedToHistory.current = false;
@@ -142,7 +148,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     setProgress(0);
     setPreprocessStep(0);
     setSourceUrl(url);
-    setPhase("ready");
+    analysisStartedAt.current = performance.now();
+    setPhase("preprocessing");
   }, []);
 
   const reset = useCallback(() => {
@@ -433,7 +440,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     file,
     videoUrl,
     sourceUrl,
-    acceptUrl,
+    analyzeUrl,
     metadata,
     preprocessStep,
     progress,

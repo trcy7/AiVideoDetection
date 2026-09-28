@@ -61,7 +61,9 @@ export function UploadSection() {
                     onSubmit={(e) => {
                       e.preventDefault();
                       const v = link.trim();
-                      if (v) a.acceptUrl(v);
+                      if (!v) return;
+                      a.analyzeUrl(v);
+                      navigate("/results");
                     }}
                   >
                     <div className="linkcard__head">
@@ -135,18 +137,15 @@ export function UploadSection() {
 
           {a.phase === "ready" && !a.file && a.sourceUrl && (
             <>
-              {a.analysisError && (
-                <p className="tool__error" role="alert">
-                  Analysis failed: {a.analysisError}
-                </p>
-              )}
+              <p className="tool__error" role="alert">
+                {a.analysisError ?? "That link could not be analyzed."}
+              </p>
               <p className="tool__link-ready">
-                Ready to fetch and analyze:<br />
                 <span className="tool__link-url">{a.sourceUrl}</span>
               </p>
               <div className="tool__actions">
                 <button type="button" className="tool__cta" onClick={runAnalysis}>
-                  {a.analysisError ? "Try again" : "Run analysis"}
+                  Try again
                 </button>
                 <button type="button" className="tool__ghost" onClick={a.reset}>
                   Use a different link
