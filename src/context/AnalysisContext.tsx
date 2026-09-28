@@ -174,21 +174,26 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     dropPreview();
     // both run in parallel with the analysis and only feed the scanning view,
     // so a failure in either must change nothing about the run
-    void resolveUrlMeta(url).then((m) => {
-      setSourceMeta(m);
-      if (m) {
-        setMetadata({
-          duration: m.durationSec,
-          width: m.width,
-          height: m.height,
-          frameRate: null,      // not reported by the extractor
-          codec: null,
-        });
-      }
-    });
-    void fetchPreviewClip(url).then((u) => {
-      if (u) setPreviewUrl(u);
-    });
+    // ONE resolve, then the preview -- chained, not parallel. Each of these is
+    // a separate request to the platform, and firing them together from one
+    // datacenter IP is what gets the connection reset.
+    void resolveUrlMeta(url)
+      .then((m) => {
+        setSourceMeta(m);
+        if (m) {
+          setMetadata({
+            duration: m.durationSec,
+            width: m.width,
+            height: m.height,
+            frameRate: null,      // not reported by the extractor
+            codec: null,
+          });
+        }
+        return fetchPreviewClip(url);
+      })
+      .then((u) => {
+        if (u) setPreviewUrl(u);
+      });
     analysisStartedAt.current = performance.now();
     setPhase("preprocessing");
   }, [dropPreview]);
@@ -289,7 +294,10 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
           .catch(() => {});
       }
     },
-    [videoUrl, file, metadata, historyStore],
+    // sourceMeta resolves asynchronously after analyzeUrl starts, so omitting it
+    // here would capture the null it held at render and link history rows would
+    // get no image -- the exact case the poster fallback exists for
+    [videoUrl, file, metadata, historyStore, sourceMeta],
   );
 
   // Analyzing (REAL BACKEND): fire the request once on entering this phase,

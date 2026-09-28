@@ -64,6 +64,17 @@ _RATE_GLOBAL_WINDOW = int(os.getenv("ECNET_RATE_GLOBAL_WINDOW", "3600"))
 # at once and risk an OOM.
 _infer_lock = threading.Lock()
 
+# One link analysis now makes three yt-dlp calls -- resolve, preview, analyze --
+# and the client fires the first two together. Three concurrent connections
+# from one datacenter IP reads as abuse, and TikTok answers with a connection
+# reset. Serialising them costs a few seconds of latency and keeps the fetches
+# looking like one visitor.
+_fetch_lock = threading.Lock()
+
+# Previews double the platform traffic for decoration. Set ECNET_PREVIEW=0 to
+# drop them if a site starts refusing; the poster still renders.
+_PREVIEW_ENABLED = os.getenv("ECNET_PREVIEW", "1") != "0"
+
 _hits: dict[str, list[float]] = {}
 _all_hits: list[float] = []
 _hits_lock = threading.Lock()
@@ -299,7 +310,7 @@ def _download_clip(url: str) -> tuple[Path, Path, str, bool]:
             None, [(0, MAX_URL_SECONDS)])
         opts["force_keyframes_at_cuts"] = True
     try:
-        with yt_dlp.YoutubeDL(opts) as ydl:
+        with _fetch_lock, yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=True)
     except Exception as e:
         shutil.rmtree(tmpdir, ignore_errors=True)
@@ -335,8 +346,8 @@ def resolve_url(body: AnalyzeUrlIn) -> dict:
     except ImportError:
         raise HTTPException(503, "Link analysis is unavailable (yt-dlp not installed)")
     try:
-        with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True,
-                               "noplaylist": True, "socket_timeout": 20}) as ydl:
+        with _fetch_lock, yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True,
+                                            "noplaylist": True, "socket_timeout": 20}) as ydl:
             info = ydl.extract_info(url, download=False) or {}
     except Exception as e:
         raise HTTPException(422, f"Could not read that link: {str(e)[:200]}")
@@ -396,6 +407,8 @@ def preview_url(body: AnalyzeUrlIn) -> Response:
     twice. 204 when it cannot be produced -- the viewport falls back to the
     poster, and decoration must never fail an analysis.
     """
+    if not _PREVIEW_ENABLED:
+        return Response(status_code=204)
     url = body.url.strip()
     _reject_internal_host(url)
     try:
@@ -423,7 +436,7 @@ def preview_url(body: AnalyzeUrlIn) -> Response:
             # cannot trim, so the WHOLE file would arrive -- refuse the big ones.
             # max_filesize aborts silently, which is the behaviour we want here.
             opts["max_filesize"] = PREVIEW_MAX_BYTES
-        with yt_dlp.YoutubeDL(opts) as ydl:
+        with _fetch_lock, yt_dlp.YoutubeDL(opts) as ydl:
             ydl.extract_info(url, download=True)
 
         files = [f for f in tmpdir.iterdir() if f.is_file() and f.stat().st_size > 1000]
