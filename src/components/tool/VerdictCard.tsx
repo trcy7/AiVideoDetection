@@ -6,9 +6,9 @@ interface VerdictCardProps {
 }
 
 const VERDICT_COPY: Record<Verdict, { label: string; description: string }> = {
-  real: { label: "Real", description: "No AI traces found." },
-  fake: { label: "AI Generated", description: "AI-generation artifacts detected." },
-  uncertain: { label: "Uncertain", description: "Mixed signal — review manually." },
+  real: { label: "Real", description: "No generation artifacts detected." },
+  fake: { label: "AI Generated", description: "Generation artifacts detected." },
+  uncertain: { label: "Uncertain", description: "Signals inconclusive. Manual review recommended." },
 };
 
 /** Color a branch bar with the SAME calibrated bands the verdict uses, so a

@@ -55,7 +55,7 @@ export interface ReportFrame {
   caption: string;
 }
 
-/** One forensic signal shown as a metric card in the results view. */
+/** One detection signal shown as a metric card in the results view. */
 export interface Indicator {
   id: string;
   label: string;

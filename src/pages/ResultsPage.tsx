@@ -9,7 +9,7 @@ import {
 } from "../components/tool/ProcessingStatus";
 import "./ResultsPage.css";
 
-/** Dedicated forensic-report workspace at /results.
+/** Dedicated analysis-report workspace at /results.
  *  Three states: scanning (live progress), report (results), and an
  *  empty state with history for direct visits/refreshes. */
 export function ResultsPage() {
@@ -28,7 +28,7 @@ export function ResultsPage() {
             </svg>
             New analysis
           </Link>
-          <span className="hud-label rpage__crumb">Forensic report</span>
+          <span className="hud-label rpage__crumb">Analysis report</span>
         </div>
 
         {inFlight && (a.file || a.sourceUrl) && (
@@ -174,7 +174,7 @@ export function ResultsPage() {
               </span>
               <h1 className="rpage__title">No report open</h1>
               <p className="rpage__subtitle">
-                Run a scan to generate a forensic report, or reopen a past
+                Run a scan to generate a report, or reopen a past
                 analysis below.
               </p>
               <Link className="tool__cta rpage__empty-cta" to="/#analyze">

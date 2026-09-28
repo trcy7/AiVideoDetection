@@ -11,7 +11,7 @@ interface Stat {
 }
 
 const STATS: Stat[] = [
-  { value: 736000, decimals: 0, suffix: "", label: "Frames analyzed", group: true },
+  { value: 785824, decimals: 0, suffix: "", label: "Frames analyzed", group: true },
   { value: 13, decimals: 0, suffix: "", label: "Generator models" },
   { value: 32, decimals: 0, suffix: "", label: "Frames per scan" },
   { value: 3, decimals: 0, suffix: "", label: "Analysis branches" },

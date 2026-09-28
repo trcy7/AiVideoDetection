@@ -35,14 +35,14 @@ export function UploadSection() {
 
       <div className="container tool">
         <div className="tool__head">
-          <span className="hud-label tool__eyebrow">Forensic scanner</span>
+          <span className="hud-label tool__eyebrow">Video analysis</span>
           <h1 className="tool__title">
             Is this video <span className="gradient-text">AI-generated?</span>
           </h1>
           <p className="tool__lead">
             {USE_REAL_BACKEND
-              ? "Drop a clip — ECNet scores it frame by frame and returns a verdict, a confidence score, and a heatmap of the evidence."
-              : "Sample results run entirely in your browser. Connect the ECNet backend for live detection on your own clips."}
+              ? "ECNet scores each frame and returns a verdict, a calibrated score, a confidence figure, and a heatmap of the regions that drove it."
+              : "Sample results only. Connect the ECNet backend to analyse your own clips."}
           </p>
         </div>
 

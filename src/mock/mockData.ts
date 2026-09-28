@@ -83,7 +83,7 @@ function buildFrames(verdict: Verdict, duration: number | null): HeatmapFrame[] 
 }
 
 /** Builds a small but valid PDF from scratch and returns an object URL for it. */
-/** Forensic signals rendered as metric cards. Values orbit the fakeScore
+/** Detection signals rendered as metric cards. Values orbit the fakeScore
  *  with per-signal jitter so a REAL video reads mostly "consistent" and a
  *  FAKE one reads mostly "anomalous" — same trick as the branch scores. */
 const INDICATOR_DEFS: Array<{ id: string; label: string; description: string }> = [

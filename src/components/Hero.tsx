@@ -3,7 +3,7 @@ import "./Hero.css";
 const CHIPS = [
   "Sora · Pika · Kling & more",
   "Frame-level heatmaps",
-  "Whole-frame forensics",
+  "Full-frame analysis",
   "Explainable verdicts",
 ];
 

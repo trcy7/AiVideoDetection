@@ -8,7 +8,7 @@ const FAQS: Array<{ q: string; a: string }> = [
   },
   {
     q: "How accurate is the detection?",
-    a: "No detector is perfect, which is why every verdict ships with a confidence score, per-branch evidence, and an explainable heatmap. Treat the output as strong evidence to weigh, not as final proof — especially in the Uncertain band, and especially for generators the model hasn't seen before.",
+    a: "No detector is perfect, which is why every verdict ships with a confidence score, per-branch evidence, and an explainable heatmap. The output is evidence for review, not proof. This applies in particular within the Uncertain band, and to generators the model has not been trained on.",
   },
   {
     q: "What does the confidence score actually mean?",
@@ -16,11 +16,11 @@ const FAQS: Array<{ q: string; a: string }> = [
   },
   {
     q: "Is my video uploaded to a server?",
-    a: "Yes — the clip is sent to the ECNet inference server, analysed, and deleted as soon as the analysis finishes; it is never written to permanent storage. What is kept is the verdict metadata and a SHA-256 hash of the file, so a repeat scan can be recognised without retaining the video itself. File inspection and metadata still run locally in your browser.",
+    a: "The clip is sent to the ECNet inference server, analysed, and deleted once the analysis completes; it is never written to permanent storage. What is kept is the verdict metadata and a SHA-256 hash of the file, so a repeat scan can be recognised without retaining the video itself. File inspection and metadata still run locally in your browser.",
   },
   {
     q: "Why does the heatmap matter if I already have a verdict?",
-    a: "Because it makes the decision auditable. The GradCAM overlay shows which regions drove the score — if it highlights a morphing background, sliding texture, or a watermark ghost, you can see the evidence yourself; if it's reacting to compression noise, you'll see that too and can discount the verdict.",
+    a: "It makes the decision auditable. The GradCAM overlay shows which regions drove the score: if it highlights a morphing background, sliding texture, or a watermark ghost, you can see the evidence yourself; if it's reacting to compression noise, you'll see that too and can discount the verdict.",
   },
   {
     q: "What video formats and sizes are supported?",
