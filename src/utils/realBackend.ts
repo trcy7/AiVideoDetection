@@ -68,6 +68,33 @@ export function cleanModelVersion(v: string): string {
   return v.split("·")[0].trim() || v;
 }
 
+/** What a link is, before it has been analysed. */
+export interface LinkMeta {
+  title: string | null;
+  uploader: string | null;
+  durationSec: number | null;
+  thumbnail: string | null;
+  extractor: string | null;
+}
+
+/** Title/poster for a pasted link, so the scanning view can name what it is
+ *  working on instead of echoing the URL. Purely cosmetic -- resolves to null
+ *  on any failure rather than disturbing the analysis it runs alongside. */
+export async function resolveUrlMeta(url: string): Promise<LinkMeta | null> {
+  if (BACKEND_URL_ERROR) return null;
+  try {
+    const res = await fetch(`${BACKEND_URL}/resolve-url`, {
+      method: "POST",
+      headers: { ...BACKEND_HEADERS, "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as LinkMeta;
+  } catch {
+    return null;
+  }
+}
+
 /** Analyze a public video link. The server fetches at most the first minute,
  *  scores it, and deletes the download -- nothing is uploaded from here. */
 export async function analyzeUrlWithBackend(url: string): Promise<BackendAnalysis> {

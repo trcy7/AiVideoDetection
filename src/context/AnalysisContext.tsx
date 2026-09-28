@@ -20,7 +20,13 @@ import { buildReportUrl, generateMockResult } from "../mock/mockData";
 import { captureReportFrames, reportFramesFromStills } from "../utils/captureReportFrames";
 import { useAnalysisHistory } from "../hooks/useAnalysisHistory";
 import { PREPROCESS_STEPS } from "../components/tool/ProcessingStatus";
-import { USE_REAL_BACKEND, analyzeWithBackend, analyzeUrlWithBackend } from "../utils/realBackend";
+import {
+  USE_REAL_BACKEND,
+  analyzeWithBackend,
+  analyzeUrlWithBackend,
+  resolveUrlMeta,
+  type LinkMeta,
+} from "../utils/realBackend";
 import { putVideo, getVideo, deleteVideo, clearVideos, pruneVideos } from "../utils/videoStore";
 
 /**
@@ -68,6 +74,8 @@ interface AnalysisContextValue {
   /** Analyze a pasted link instead of a local file; starts immediately. */
   analyzeUrl: (url: string) => void;
   sourceUrl: string | null;
+  /** Title/poster for the pasted link; null until resolved, or if it failed. */
+  sourceMeta: LinkMeta | null;
   startAnalysis: () => void;
   reset: () => void;
   selectHistory: (item: HistoryItem) => void;
@@ -83,6 +91,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const [file, setFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+  const [sourceMeta, setSourceMeta] = useState<LinkMeta | null>(null);
   const [metadata, setMetadata] = useState<VideoMetadata>(EMPTY_METADATA);
   const [preprocessStep, setPreprocessStep] = useState(0);
   const [progress, setProgress] = useState(0);
@@ -106,6 +115,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     setAnalysisError(null);
     setFile(accepted);
     setSourceUrl(null);
+    setSourceMeta(null);
     setMetadata(EMPTY_METADATA);
     setResult(null);
     setThumbnail(null);
@@ -148,6 +158,10 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     setProgress(0);
     setPreprocessStep(0);
     setSourceUrl(url);
+    setSourceMeta(null);
+    // runs in parallel with the analysis -- it only feeds the scanning view's
+    // caption and poster, so a failure here must change nothing
+    void resolveUrlMeta(url).then(setSourceMeta);
     analysisStartedAt.current = performance.now();
     setPhase("preprocessing");
   }, []);
@@ -163,6 +177,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       return null;
     });
     setFile(null);
+    setSourceUrl(null);
+    setSourceMeta(null);
     setMetadata(EMPTY_METADATA);
     setResult(null);
     setThumbnail(null);
@@ -440,6 +456,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     file,
     videoUrl,
     sourceUrl,
+    sourceMeta,
     analyzeUrl,
     metadata,
     preprocessStep,

@@ -36,8 +36,14 @@ export function ResultsPage() {
             <div className="rpage__scanning-head">
               <h1 className="rpage__title">Scanning video</h1>
               <p className="rpage__subtitle rpage__filename">
-                {a.file ? a.file.name : a.sourceUrl}
+                {a.file ? a.file.name : a.sourceMeta?.title ?? a.sourceUrl}
               </p>
+              {!a.file && a.sourceMeta?.uploader && (
+                <p className="rpage__byline">
+                  {a.sourceMeta.uploader}
+                  {a.sourceMeta.extractor ? ` · ${a.sourceMeta.extractor}` : ""}
+                </p>
+              )}
             </div>
 
             <div className="scan">
@@ -50,6 +56,13 @@ export function ResultsPage() {
                     loop
                     muted
                     playsInline
+                    aria-hidden="true"
+                  />
+                ) : a.sourceMeta?.thumbnail ? (
+                  <img
+                    className="scan__video"
+                    src={a.sourceMeta.thumbnail}
+                    alt=""
                     aria-hidden="true"
                   />
                 ) : (

@@ -264,6 +264,39 @@ class AnalyzeUrlIn(BaseModel):
     url: str
 
 
+@app.post("/resolve-url")
+def resolve_url(body: AnalyzeUrlIn) -> dict:
+    """Title, uploader, duration and poster for a link -- metadata only.
+
+    extract_info(download=False) costs a second or two and no GPU, so this is
+    deliberately outside the analysis rate limit: it runs alongside every link
+    analysis, and charging for it would halve the usable budget. The frontend
+    calls it so the scanning view can show what is being analysed instead of a
+    raw URL, which only becomes known otherwise once the analysis finishes.
+    """
+    url = body.url.strip()
+    _reject_internal_host(url)
+    try:
+        import yt_dlp
+    except ImportError:
+        raise HTTPException(503, "Link analysis is unavailable (yt-dlp not installed)")
+    try:
+        with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True,
+                               "noplaylist": True, "socket_timeout": 20}) as ydl:
+            info = ydl.extract_info(url, download=False) or {}
+    except Exception as e:
+        raise HTTPException(422, f"Could not read that link: {str(e)[:200]}")
+
+    dur = info.get("duration")
+    return {
+        "title": (info.get("title") or "").strip() or None,
+        "uploader": (info.get("uploader") or info.get("channel") or "").strip() or None,
+        "durationSec": float(dur) if isinstance(dur, (int, float)) else None,
+        "thumbnail": info.get("thumbnail") or None,
+        "extractor": info.get("extractor_key") or info.get("extractor") or None,
+    }
+
+
 @app.post("/analyze-url", dependencies=[Depends(_rate_limit)])
 def analyze_url(body: AnalyzeUrlIn) -> dict:
     """Analyze a public video link (YouTube/TikTok/Instagram/Facebook/direct).
