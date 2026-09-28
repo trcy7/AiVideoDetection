@@ -529,6 +529,16 @@ def init_server(
     _state["predictor"] = predictor
 
     overridden = real_below is not None or fake_above is not None
+    # Loudest line in the banner: a CPU session behaves identically to a GPU
+    # one until analyses quietly overrun the tunnel's 300 s ceiling, and the
+    # blocking serve cell means no second cell can be run to check.
+    dev = str(getattr(predictor, "device", "?"))
+    if dev.startswith("cuda"):
+        import torch
+        print(f"Device: {dev} -- {torch.cuda.get_device_name(0)}")
+    else:
+        print(f"Device: {dev}  *** NO GPU -- analyses will be slow and may "
+              f"exceed the 300 s tunnel limit. Set Accelerator to GPU. ***")
     print(f"Model resident. Version label: {_state['model_version']}")
     print(f"Verdict bands: real < {icfg['verdict_real_below']} | uncertain | AI > {icfg['verdict_fake_above']}"
           + ("  (OVERRIDDEN via flags)" if overridden else "  (from checkpoint)"))
