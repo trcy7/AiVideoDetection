@@ -210,3 +210,27 @@ svg {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* iOS Safari zooms the whole page when a focused field's text is smaller than
+   16px, and never zooms back out -- so tapping the link box left the layout
+   magnified for the rest of the session. Set on every text field rather than
+   the one that showed it, since the next field added would bring it back.
+
+   pointer:coarse rather than a width query: a tablet in landscape is wide and
+   still behaves this way. Desktop keeps the smaller type.
+
+   Note the fix is NOT maximum-scale=1 on the viewport, which stops the zoom by
+   disabling pinch-zoom for everyone, including people who need it. */
+@media (pointer: coarse) {
+  input[type="text"],
+  input[type="url"],
+  input[type="search"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="number"],
+  input[type="password"],
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
