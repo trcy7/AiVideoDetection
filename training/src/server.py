@@ -258,6 +258,20 @@ def _analyze_path(path: Path, file_hash: str) -> dict:
     return result
 
 
+# Obvious non-video targets, refused before yt-dlp is asked: pointing it at a
+# .jpg yields an extractor error the user cannot act on.
+_IMAGE_EXT = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".heic", ".avif", ".svg")
+_AUDIO_EXT = (".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus")
+
+
+def _reject_non_video_url(url: str) -> None:
+    path = urlparse(url).path.lower()
+    if path.endswith(_IMAGE_EXT):
+        raise HTTPException(422, "That link is an image. This tool analyses video.")
+    if path.endswith(_AUDIO_EXT):
+        raise HTTPException(422, "That link is audio. This tool needs video frames.")
+
+
 def _reject_internal_host(url: str) -> None:
     """The server fetches whatever the client pastes, so refuse anything that
     resolves inside the network -- otherwise this is an SSRF hole into the
@@ -283,6 +297,7 @@ def _download_clip(url: str) -> tuple[Path, Path, str, bool]:
     except ImportError:
         raise HTTPException(503, "Link analysis is unavailable (yt-dlp not installed)")
 
+    _reject_non_video_url(url)
     _reject_internal_host(url)
     tmpdir = Path(tempfile.mkdtemp(prefix="ecnet_url_"))
     # Uploads are rejected above a minute, so links must be too. Trimming them
@@ -376,6 +391,7 @@ def resolve_url(body: AnalyzeUrlIn) -> dict:
     raw URL, which only becomes known otherwise once the analysis finishes.
     """
     url = body.url.strip()
+    _reject_non_video_url(url)
     _reject_internal_host(url)
     try:
         import yt_dlp
@@ -446,6 +462,7 @@ def preview_url(body: AnalyzeUrlIn) -> Response:
     if not _PREVIEW_ENABLED:
         return Response(status_code=204)
     url = body.url.strip()
+    _reject_non_video_url(url)
     _reject_internal_host(url)
     try:
         import yt_dlp

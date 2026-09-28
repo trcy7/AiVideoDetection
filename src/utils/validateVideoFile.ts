@@ -18,6 +18,11 @@ export const ACCEPTED_EXTENSIONS = [
   ".avi",
 ];
 
+/** Named so the message can say what was actually dropped. "Unsupported file
+ *  type .jpg" leaves the user guessing; "that is an image" does not. */
+const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".heic", ".avif", ".svg"];
+const AUDIO_EXTENSIONS = [".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus"];
+
 export interface ValidationResult {
   valid: boolean;
   error?: string;
@@ -38,6 +43,12 @@ export function validateVideoFile(file: File): ValidationResult {
     ACCEPTED_EXTENSIONS.includes(extension);
 
   if (!typeOk) {
+    if (file.type.startsWith("image/") || IMAGE_EXTENSIONS.includes(extension)) {
+      return { valid: false, error: "That's an image. This tool analyses video — pick a clip instead." };
+    }
+    if (file.type.startsWith("audio/") || AUDIO_EXTENSIONS.includes(extension)) {
+      return { valid: false, error: "That's an audio file. This tool needs video frames to analyse." };
+    }
     return {
       valid: false,
       error: `Unsupported file type "${extension || file.type || "unknown"}". Accepted formats: ${ACCEPTED_EXTENSIONS.join(", ")}.`,
@@ -76,7 +87,7 @@ export function checkVideoDuration(file: File): Promise<ValidationResult> {
       if (Number.isFinite(d) && d > MAX_DURATION_SECONDS) {
         done({
           valid: false,
-          error: `Video is ${Math.round(d)}s long. Maximum length is 1 minute.`,
+          error: `That video is ${Math.round(d)}s. Maximum length is ${MAX_DURATION_SECONDS}s (1 minute).`,
         });
       } else {
         done({ valid: true });
