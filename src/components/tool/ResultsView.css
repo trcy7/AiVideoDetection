@@ -133,8 +133,7 @@
   padding: var(--space-5);
 }
 
-.rview__heatmap,
-.rview__timeline {
+.rview__heatmap {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -179,8 +178,7 @@
     padding-inline: var(--space-3);
   }
   .rview__verdict,
-  .rview__heatmap,
-  .rview__timeline {
+  .rview__heatmap {
     padding: var(--space-4);
   }
 }

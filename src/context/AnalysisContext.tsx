@@ -174,7 +174,18 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     dropPreview();
     // both run in parallel with the analysis and only feed the scanning view,
     // so a failure in either must change nothing about the run
-    void resolveUrlMeta(url).then(setSourceMeta);
+    void resolveUrlMeta(url).then((m) => {
+      setSourceMeta(m);
+      if (m) {
+        setMetadata({
+          duration: m.durationSec,
+          width: m.width,
+          height: m.height,
+          frameRate: null,      // not reported by the extractor
+          codec: null,
+        });
+      }
+    });
     void fetchPreviewClip(url).then((u) => {
       if (u) setPreviewUrl(u);
     });
@@ -242,7 +253,9 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       const blob = file;
       const snapshot = { fileSize, metadata };
       // card thumbnail + history persistence
-      (url ? captureThumbnail(url) : Promise.resolve(null)).then((thumb) => {
+      const poster = sourceMeta?.thumbnail ?? null;
+      (url ? captureThumbnail(url) : Promise.resolve(null)).then((grabbed) => {
+        const thumb = grabbed ?? poster;
         setThumbnail(thumb);
         const { reportUrl: _reportUrl, ...resultSansReport } = res;
         const item: HistoryItem = {
@@ -451,9 +464,9 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const display: ResultDisplay | null = liveActive
     ? {
         result: result as AnalysisResult,
-        videoUrl,
-        thumbnail,
-        fileSize: file?.size ?? 0,
+        videoUrl: videoUrl ?? previewUrl,
+        thumbnail: thumbnail ?? sourceMeta?.thumbnail ?? null,
+        fileSize: file?.size ?? sourceMeta?.filesize ?? 0,
         metadata,
         selectedId: lastSavedId,
       }

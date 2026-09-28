@@ -73,6 +73,9 @@ export interface LinkMeta {
   title: string | null;
   uploader: string | null;
   durationSec: number | null;
+  width: number | null;
+  height: number | null;
+  filesize: number | null;
   thumbnail: string | null;
   extractor: string | null;
 }

@@ -341,11 +341,22 @@ def resolve_url(body: AnalyzeUrlIn) -> dict:
     except Exception as e:
         raise HTTPException(422, f"Could not read that link: {str(e)[:200]}")
 
-    dur = info.get("duration")
+    def num(*keys):
+        for k in keys:
+            v = info.get(k)
+            if isinstance(v, (int, float)) and v > 0:
+                return float(v)
+        return None
+
     return {
         "title": (info.get("title") or "").strip() or None,
         "uploader": (info.get("uploader") or info.get("channel") or "").strip() or None,
-        "durationSec": float(dur) if isinstance(dur, (int, float)) else None,
+        "durationSec": num("duration"),
+        # dimensions and size let a link fill the same preview panel an upload
+        # does; filesize is often only approximate, which is fine for display
+        "width": num("width"),
+        "height": num("height"),
+        "filesize": num("filesize", "filesize_approx"),
         "thumbnail": info.get("thumbnail") or None,
         "extractor": info.get("extractor_key") or info.get("extractor") or None,
     }
