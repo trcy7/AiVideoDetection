@@ -117,8 +117,11 @@ _INFERENCE_DEFAULTS = {
     # itself leans AI, so a real verdict stops drawing accusations.
     "cam_min_prob": 0.50,
     "max_boxes": 3,
-    "verdict_real_below": 35,
-    "verdict_fake_above": 65,
+    # Operating point. Bands are INCLUSIVE at both ends: real at or below
+    # real_below, AI at or above fake_above, uncertain strictly between. A
+    # checkpoint's own config overrides these, and init_server overrides that.
+    "verdict_real_below": 75,
+    "verdict_fake_above": 80,
     "tta": False,              # off by default: calibration was fit without TTA
     # Heatmap stills baked into the response. Without them the UI can only draw
     # the heatmap by re-decoding the video client-side, which is impossible for
@@ -304,9 +307,9 @@ def _predict_hybrid(video_path: str | Path, model, cfg: dict, device: torch.devi
     scored = len(fused_probs)
     mean_prob = float(np.mean(fused_probs))               # the model's answer
     fake_score = round(mean_prob * 100.0, 1)
-    if fake_score < float(icfg["verdict_real_below"]):
+    if fake_score <= float(icfg["verdict_real_below"]):
         verdict = "real"
-    elif fake_score > float(icfg["verdict_fake_above"]):
+    elif fake_score >= float(icfg["verdict_fake_above"]):
         verdict = "fake"
     else:
         verdict = "uncertain"
@@ -414,9 +417,9 @@ def _predict_spatial(video_path: str | Path, model, cfg: dict, device: torch.dev
     std_prob = float(np.std(probs))
     fake_score = round(mean_prob * 100.0, 1)
 
-    if fake_score < float(icfg["verdict_real_below"]):
+    if fake_score <= float(icfg["verdict_real_below"]):
         verdict = "real"
-    elif fake_score > float(icfg["verdict_fake_above"]):
+    elif fake_score >= float(icfg["verdict_fake_above"]):
         verdict = "fake"
     else:
         verdict = "uncertain"
@@ -467,13 +470,13 @@ def predict(video_path: str | Path, checkpoint_path: str | Path, config_path: st
     return Predictor(checkpoint_path, config_path).predict(video_path)
 
 
-def validate_result(result: dict, real_below: float = 35.0, fake_above: float = 65.0) -> None:
+def validate_result(result: dict, real_below: float = 75.0, fake_above: float = 80.0) -> None:
     """Assert the frontend contract (score range, verdict matches bands, box coords)."""
     assert isinstance(result["fileName"], str) and result["fileName"]
     assert 0.0 <= result["fakeScore"] <= 100.0
     assert 0.0 <= result["confidence"] <= 100.0
     score, verdict = result["fakeScore"], result["verdict"]
-    expected = "real" if score < real_below else ("fake" if score > fake_above else "uncertain")
+    expected = "real" if score <= real_below else ("fake" if score >= fake_above else "uncertain")
     assert verdict == expected, f"verdict {verdict} does not match thresholds for {score}"
     assert 0.0 <= result["branchScores"]["spatial"] <= 100.0
     # optional branches (frequency=FFT, opticalFlow=ConvLSTM, motion=residual):

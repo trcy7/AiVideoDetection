@@ -147,6 +147,14 @@ def _verify_public(url: str, attempts: int = 8, delay: float = 5.0) -> bool:
     return False
 
 
+# Deployed operating point: real <= 75 | uncertain | AI >= 80. Passed explicitly
+# because ECNet-7 carries 65/75 from retune_bands.py in its own config, and the
+# notebook calls serve() with no arguments. Keep in step with DEFAULT_BANDS in
+# the frontend's src/utils/bands.ts.
+REAL_BELOW = 75.0
+FAKE_ABOVE = 80.0
+
+
 def serve(
     checkpoint: Optional[str] = None,
     *,
@@ -155,6 +163,8 @@ def serve(
     db_path: str = "/kaggle/working/ecnet.db",
     max_score_windows: Optional[int] = None,
     max_cam_windows: Optional[int] = None,
+    real_below: Optional[float] = REAL_BELOW,
+    fake_above: Optional[float] = FAKE_ABOVE,
 ) -> None:
     """Load the model, expose it on the reserved domain, then block.
 
@@ -190,6 +200,8 @@ def serve(
         db_path=db_path,
         max_score_windows=max_score_windows,
         max_cam_windows=max_cam_windows,
+        real_below=real_below,
+        fake_above=fake_above,
     )
 
     import uvicorn

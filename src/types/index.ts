@@ -72,9 +72,10 @@ export interface AnalysisResult {
   confidence: number;
   /** Position on the real→fake axis, 0 = certainly real, 100 = certainly fake. */
   fakeScore: number;
-  /** Calibrated verdict thresholds from the model checkpoint: verdict is
-   *  "real" below realBelow, "fake" above fakeAbove, "uncertain" between.
-   *  Absent for older/mock results — UI falls back to 35/65. */
+  /** Calibrated verdict thresholds from the model checkpoint. Both ends are
+   *  inclusive: "real" at or below realBelow, "fake" at or above fakeAbove,
+   *  "uncertain" strictly between. Absent for older/mock results — the UI
+   *  falls back to DEFAULT_BANDS in utils/bands.ts. */
   bands?: { realBelow: number; fakeAbove: number };
   branchScores: BranchScores;
   indicators: Indicator[];

@@ -8,6 +8,7 @@ import type {
   Verdict,
 } from "../types";
 import { cleanModelVersion } from "../utils/realBackend";
+import { DEFAULT_BANDS, verdictFor } from "../utils/bands";
 
 export const FRAME_COUNT = 32;
 export const MODEL_VERSION = "ECNet-7";
@@ -22,10 +23,12 @@ function pickVerdict(): Verdict {
   return "uncertain";
 }
 
+// Scores sit inside the deployed bands (real <= 75 | uncertain | AI >= 80),
+// so a mock run can't show a verdict its own score contradicts.
 function fakeScoreFor(verdict: Verdict): number {
-  if (verdict === "real") return 6 + Math.random() * 20; // 6–26
-  if (verdict === "fake") return 74 + Math.random() * 22; // 74–96
-  return 42 + Math.random() * 16; // 42–58
+  if (verdict === "real") return 4 + Math.random() * 68; // 4–72
+  if (verdict === "fake") return 82 + Math.random() * 16; // 82–98
+  return 75.5 + Math.random() * 4; // 75.5–79.5
 }
 
 function confidenceFor(verdict: Verdict): number {
@@ -232,7 +235,7 @@ export function buildReportUrl(r: {
 
   // plain-language assessment of THIS result
   const bandsTxt = r.bands
-    ? `Calibrated thresholds for this model: real below ${r.bands.realBelow}, AI generated above ${r.bands.fakeAbove}.`
+    ? `Calibrated thresholds for this model: real at or below ${r.bands.realBelow}, AI generated at or above ${r.bands.fakeAbove}.`
     : "";
   const ASSESS: Record<Verdict, string> = {
     real: `ECNet found no consistent evidence of synthetic generation in this clip. Per-frame texture and inter-frame consistency both behaved like camera-captured footage across the frames analyzed. ${bandsTxt}`,
@@ -371,8 +374,9 @@ export function generateMockResult(
   duration: number | null,
   processingMs: number,
 ): AnalysisResult {
-  const verdict = pickVerdict();
-  const fakeScore = fakeScoreFor(verdict);
+  // derive the verdict back from the score, so the two agree by construction
+  const fakeScore = fakeScoreFor(pickVerdict());
+  const verdict = verdictFor(fakeScore);
   const confidence = confidenceFor(verdict);
   const branchScores = branchScoresFor(fakeScore);
   const indicators = buildIndicators(fakeScore);
@@ -383,6 +387,7 @@ export function generateMockResult(
     verdict,
     confidence,
     fakeScore,
+    bands: DEFAULT_BANDS,
     branchScores,
     indicators,
     frames: buildFrames(verdict, duration),
@@ -394,6 +399,7 @@ export function generateMockResult(
       verdict,
       confidence,
       fakeScore,
+      bands: DEFAULT_BANDS,
       branchScores,
       indicators,
       analyzedAt,

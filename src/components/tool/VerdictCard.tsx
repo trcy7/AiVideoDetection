@@ -1,4 +1,5 @@
 import type { AnalysisResult, Verdict } from "../../types";
+import { DEFAULT_BANDS } from "../../utils/bands";
 import "./VerdictCard.css";
 
 interface VerdictCardProps {
@@ -13,7 +14,7 @@ const VERDICT_COPY: Record<Verdict, { label: string; description: string }> = {
 
 /** Color a branch bar with the SAME calibrated bands the verdict uses, so a
  *  score of 80 reads "uncertain" (not "fake") when the checkpoint's fake
- *  threshold is 94. Falls back to 35/65 for mock/older results without bands. */
+ *  threshold is 94. Falls back to the deployed bands when a result has none. */
 function VerdictIcon({ verdict }: { verdict: Verdict }) {
   if (verdict === "real") {
     return (
@@ -70,7 +71,7 @@ export function VerdictCard({ result }: VerdictCardProps) {
           <span className="verdict-card__stat">
             <b>{result.fakeScore.toFixed(1)}</b>
             <small>
-              score · AI above {(result.bands?.fakeAbove ?? 65).toFixed(0)}
+              score · AI from {(result.bands?.fakeAbove ?? DEFAULT_BANDS.fakeAbove).toFixed(0)}
             </small>
           </span>
           <span className="verdict-card__stat">

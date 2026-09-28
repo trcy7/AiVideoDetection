@@ -593,17 +593,42 @@ def init_server(
     print(f"Loading checkpoint: {checkpoint_path} ...")
     predictor = Predictor(checkpoint_path)
     icfg = predictor.cfg["inference"]
+
+    # Operating point, most specific wins: explicit argument, then environment,
+    # then whatever calibration the checkpoint was saved with. The env layer is
+    # what lets a deployment move the bands without editing code or re-saving a
+    # 436 MB checkpoint -- ECNet-7 carries 65/75 from retune_bands.py.
+    def _band(arg: Optional[float], env: str) -> tuple[Optional[float], str]:
+        if arg is not None:
+            return float(arg), "flag"
+        raw = os.getenv(env)
+        if raw is None or not raw.strip():
+            return None, "checkpoint"
+        try:
+            return float(raw), f"${env}"
+        except ValueError:
+            raise SystemExit(f"{env} must be a number, got {raw!r}")
+
+    real_below, real_src = _band(real_below, "ECNET_REAL_BELOW")
+    fake_above, fake_src = _band(fake_above, "ECNET_FAKE_ABOVE")
+
     if real_below is not None:
-        icfg["verdict_real_below"] = float(real_below)
+        icfg["verdict_real_below"] = real_below
     if fake_above is not None:
-        icfg["verdict_fake_above"] = float(fake_above)
+        icfg["verdict_fake_above"] = fake_above
+
+    lo = float(icfg["verdict_real_below"])
+    hi = float(icfg["verdict_fake_above"])
+    if not 0.0 <= lo <= hi <= 100.0:
+        raise SystemExit(
+            f"Verdict bands must satisfy 0 <= real_below <= fake_above <= 100; got {lo} and {hi}."
+        )
     if max_score_windows is not None:
         icfg["max_score_windows"] = max(1, int(max_score_windows))
     if max_cam_windows is not None:
         icfg["max_cam_windows"] = max(1, int(max_cam_windows))
     _state["predictor"] = predictor
 
-    overridden = real_below is not None or fake_above is not None
     # Loudest line in the banner: a CPU session behaves identically to a GPU
     # one until analyses quietly overrun the tunnel's 300 s ceiling, and the
     # blocking serve cell means no second cell can be run to check.
@@ -615,8 +640,7 @@ def init_server(
         print(f"Device: {dev}  *** NO GPU -- analyses will be slow and may "
               f"exceed the 300 s tunnel limit. Set Accelerator to GPU. ***")
     print(f"Model resident. Version label: {_state['model_version']}")
-    print(f"Verdict bands: real < {icfg['verdict_real_below']} | uncertain | AI > {icfg['verdict_fake_above']}"
-          + ("  (OVERRIDDEN via flags)" if overridden else "  (from checkpoint)"))
+    print(f"Verdict bands: real <= {lo:g} ({real_src}) | uncertain | AI >= {hi:g} ({fake_src})")
     print(f"Storage: {db_path}" if db.enabled() else "Storage: disabled (no audit trail / feedback)")
     print(f"Coverage: up to {icfg.get('max_score_windows', 48)} scoring windows, "
           f"GradCAM on {icfg.get('max_cam_windows', 8)}")

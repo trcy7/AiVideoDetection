@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Verdict } from "../../types";
+import { DEFAULT_BANDS } from "../../utils/bands";
 import "./ConfidenceGauge.css";
 
 interface ConfidenceGaugeProps {
@@ -7,7 +8,7 @@ interface ConfidenceGaugeProps {
   score: number;
   verdict: Verdict;
   /** Calibrated thresholds from the model checkpoint. When absent the gauge
-   *  falls back to the historical 35/65 split (mock results). */
+   *  falls back to the deployed operating point (mock/older results). */
   bands?: { realBelow: number; fakeAbove: number };
 }
 
@@ -78,8 +79,8 @@ export function ConfidenceGauge({ score, verdict, bands }: ConfidenceGaugeProps)
     return () => cancelAnimationFrame(raf);
   }, [score]);
 
-  const realBelow = bands?.realBelow ?? 35;
-  const fakeAbove = bands?.fakeAbove ?? 65;
+  const realBelow = bands?.realBelow ?? DEFAULT_BANDS.realBelow;
+  const fakeAbove = bands?.fakeAbove ?? DEFAULT_BANDS.fakeAbove;
   const zones = ZONES;
   // needle follows the MAPPED position so it always sits in the zone that
   // matches the verdict, whatever the checkpoint's calibration happens to be
