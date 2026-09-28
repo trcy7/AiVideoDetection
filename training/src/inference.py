@@ -12,6 +12,8 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import os
+import time
 from pathlib import Path
 
 import cv2
@@ -116,6 +118,16 @@ _INFERENCE_DEFAULTS = {
     # Heatmap stills baked into the response. Without them the UI can only draw
     # the heatmap by re-decoding the video client-side, which is impossible for
     # link analyses and unreliable for uploads. Bounded so the payload stays small.
+    # Wall-clock ceiling. Coverage scales with clip length, so on slow hardware
+    # a long clip silently exceeds the serving tunnel's request limit and the
+    # user gets a gateway error instead of a verdict. Stopping early costs
+    # coverage; overrunning costs the answer.
+    #
+    # It bounds the SCORING loop, not the decode: read_video_windows reads
+    # every window's frames before scoring begins, and that pass cannot be
+    # undone once it has run. On hardware where decode alone approaches the
+    # budget, lower max_score_windows too -- this is the backstop, not the fix.
+    "budget_sec": float(os.getenv("ECNET_BUDGET_SEC", "150")),
     "max_frame_images": 12,
     "frame_image_size": 480,   # longest edge of each still
 }
@@ -185,6 +197,7 @@ def _window_probs(model, win_tensor: torch.Tensor, use_tta: bool
 def _predict_hybrid(video_path: str | Path, model, cfg: dict, device: torch.device) -> dict:
     """Hybrid: sample windows (count scales with duration) -> fused verdict;
     GradCAM boxes from the spatial branch. Preprocessing matches training."""
+    started_at = time.perf_counter()
     ecfg, icfg = cfg["extraction"], cfg["inference"]
     image_size = int(ecfg["image_size"])
     use_tta = bool(icfg.get("tta", True))
@@ -232,8 +245,13 @@ def _predict_hybrid(video_path: str | Path, model, cfg: dict, device: torch.devi
     cam_frame_total = len(cam_windows) * int(ecfg.get("window_len", 16))
     img_every = (-(-cam_frame_total // max_images)) if (img_size and max_images) else 0
     cam_seen = 0
+    budget = float(icfg.get("budget_sec", 150) or 0)
+    planned = len(windows)
 
     for wi, window in enumerate(windows):
+        # keep at least one window so there is always something to score
+        if budget and wi > 0 and (time.perf_counter() - started_at) > budget:
+            break
         do_cam = wi in cam_windows
         tensors = []
         for src_idx, time_sec, rgb in window:
@@ -276,6 +294,7 @@ def _predict_hybrid(video_path: str | Path, model, cfg: dict, device: torch.devi
         if motion_p is not None:
             motion_probs.append(motion_p)
 
+    scored = len(fused_probs)
     mean_prob = float(np.mean(fused_probs))               # the model's answer
     fake_score = round(mean_prob * 100.0, 1)
     if fake_score < float(icfg["verdict_real_below"]):
@@ -329,6 +348,9 @@ def _predict_hybrid(video_path: str | Path, model, cfg: dict, device: torch.devi
         # different fixes. Cheap to carry (~1 KB) and computed either way.
         "windows": [{"time": t, "score": round(p * 100.0, 1)}
                     for t, p in zip(window_times, fused_probs)],
+        # surfaced so a truncated run is visible rather than silently coarser
+        "coverage": {"scored": scored, "planned": planned,
+                     "truncated": scored < planned},
     }
     validate_result(result, float(icfg["verdict_real_below"]), float(icfg["verdict_fake_above"]))
     return result
