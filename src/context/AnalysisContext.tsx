@@ -25,6 +25,7 @@ import {
   analyzeWithBackend,
   analyzeUrlWithBackend,
   resolveUrlMeta,
+  fetchPreviewClip,
   type LinkMeta,
 } from "../utils/realBackend";
 import { putVideo, getVideo, deleteVideo, clearVideos, pruneVideos } from "../utils/videoStore";
@@ -76,6 +77,8 @@ interface AnalysisContextValue {
   sourceUrl: string | null;
   /** Title/poster for the pasted link; null until resolved, or if it failed. */
   sourceMeta: LinkMeta | null;
+  /** Object URL of a short preview clip for the scanning view; null if none. */
+  previewUrl: string | null;
   startAnalysis: () => void;
   reset: () => void;
   selectHistory: (item: HistoryItem) => void;
@@ -92,6 +95,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [sourceMeta, setSourceMeta] = useState<LinkMeta | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [metadata, setMetadata] = useState<VideoMetadata>(EMPTY_METADATA);
   const [preprocessStep, setPreprocessStep] = useState(0);
   const [progress, setProgress] = useState(0);
@@ -108,6 +112,13 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
 
   const historyStore = useAnalysisHistory();
 
+  const dropPreview = useCallback(() => {
+    setPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+  }, []);
+
   const acceptFile = useCallback((accepted: File) => {
     metadataCleanup.current?.();
     savedToHistory.current = false;
@@ -116,6 +127,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     setFile(accepted);
     setSourceUrl(null);
     setSourceMeta(null);
+    dropPreview();
     setMetadata(EMPTY_METADATA);
     setResult(null);
     setThumbnail(null);
@@ -130,7 +142,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     metadataCleanup.current = extractVideoMetadata(accepted, (patch) =>
       setMetadata((m) => ({ ...m, ...patch })),
     );
-  }, []);
+  }, [dropPreview]);
 
   /** Same reset as acceptFile, but the source is a link: no File, no object
    *  URL, so the heatmap falls back to its placeholder (nothing to draw).
@@ -159,12 +171,16 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     setPreprocessStep(0);
     setSourceUrl(url);
     setSourceMeta(null);
-    // runs in parallel with the analysis -- it only feeds the scanning view's
-    // caption and poster, so a failure here must change nothing
+    dropPreview();
+    // both run in parallel with the analysis and only feed the scanning view,
+    // so a failure in either must change nothing about the run
     void resolveUrlMeta(url).then(setSourceMeta);
+    void fetchPreviewClip(url).then((u) => {
+      if (u) setPreviewUrl(u);
+    });
     analysisStartedAt.current = performance.now();
     setPhase("preprocessing");
-  }, []);
+  }, [dropPreview]);
 
   const reset = useCallback(() => {
     metadataCleanup.current?.();
@@ -179,6 +195,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     setFile(null);
     setSourceUrl(null);
     setSourceMeta(null);
+    dropPreview();
     setMetadata(EMPTY_METADATA);
     setResult(null);
     setThumbnail(null);
@@ -186,7 +203,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     setProgress(0);
     setPreprocessStep(0);
     setPhase("idle");
-  }, []);
+  }, [dropPreview]);
 
   useEffect(() => () => metadataCleanup.current?.(), []);
 
@@ -457,6 +474,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     videoUrl,
     sourceUrl,
     sourceMeta,
+    previewUrl,
     analyzeUrl,
     metadata,
     preprocessStep,

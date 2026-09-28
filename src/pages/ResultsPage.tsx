@@ -58,6 +58,17 @@ export function ResultsPage() {
                     playsInline
                     aria-hidden="true"
                   />
+                ) : a.previewUrl ? (
+                  <video
+                    className="scan__video"
+                    src={a.previewUrl}
+                    poster={a.sourceMeta?.thumbnail ?? undefined}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    aria-hidden="true"
+                  />
                 ) : a.sourceMeta?.thumbnail ? (
                   <img
                     className="scan__video"

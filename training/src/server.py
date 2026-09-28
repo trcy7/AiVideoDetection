@@ -21,6 +21,7 @@ from urllib.parse import urlparse
 
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
@@ -86,35 +87,74 @@ def _too_many(hits: list[float], limit: int, window: float, now: float) -> Optio
     return None
 
 
-def _rate_limit(request: Request) -> None:
-    if _RATE_MAX <= 0:
-        return
-    now = time.time()
-    ip = _client_ip(request)
-    with _hits_lock:
-        mine = _hits.setdefault(ip, [])
-        retry = _too_many(mine, _RATE_MAX, _RATE_WINDOW, now)
-        if retry is not None:
-            raise HTTPException(
-                429,
-                f"Rate limit: {_RATE_MAX} analyses per {_RATE_WINDOW // 60} min. "
-                f"Try again in {retry}s.",
-                headers={"Retry-After": str(retry)},
-            )
-        retry = _too_many(_all_hits, _RATE_GLOBAL, _RATE_GLOBAL_WINDOW, now)
-        if retry is not None:
-            raise HTTPException(
-                429,
-                f"The service is at capacity ({_RATE_GLOBAL} analyses/hour). "
-                f"Try again in {retry}s.",
-                headers={"Retry-After": str(retry)},
-            )
-        mine.append(now)
-        _all_hits.append(now)
-        if len(_hits) > 5000:          # bound memory; drop buckets gone idle
-            stale = now - _RATE_WINDOW
-            for k in [k for k, v in _hits.items() if not v or v[-1] <= stale]:
-                _hits.pop(k, None)
+def _limiter(per_client: int, window: int, buckets: dict, shared: list,
+             global_max: int, global_window: int, noun: str):
+    """One sliding-window limiter. Separate buckets per endpoint class: a
+    resolve and a preview fire on EVERY link analysis, so charging them to the
+    analysis budget would cut the usable analysis count to a third."""
+
+    def dependency(request: Request) -> None:
+        if per_client <= 0:
+            return
+        now = time.time()
+        ip = _client_ip(request)
+        with _hits_lock:
+            mine = buckets.setdefault(ip, [])
+            retry = _too_many(mine, per_client, window, now)
+            if retry is not None:
+                raise HTTPException(
+                    429,
+                    f"Rate limit: {per_client} {noun} per {window // 60} min. "
+                    f"Try again in {retry}s.",
+                    headers={"Retry-After": str(retry)},
+                )
+            retry = _too_many(shared, global_max, global_window, now)
+            if retry is not None:
+                raise HTTPException(
+                    429,
+                    f"The service is at capacity ({global_max} {noun}/hour). "
+                    f"Try again in {retry}s.",
+                    headers={"Retry-After": str(retry)},
+                )
+            mine.append(now)
+            shared.append(now)
+            if len(buckets) > 5000:        # bound memory; drop idle buckets
+                stale = now - window
+                for k in [k for k, v in buckets.items() if not v or v[-1] <= stale]:
+                    buckets.pop(k, None)
+
+    return dependency
+
+
+_rate_limit = _limiter(_RATE_MAX, _RATE_WINDOW, _hits, _all_hits,
+                       _RATE_GLOBAL, _RATE_GLOBAL_WINDOW, "analyses")
+
+# Metadata and preview: no GPU, but they do fetch bytes, so they are capped --
+# just on their own budget. Sized for ~2 calls per analysis plus headroom.
+_FETCH_MAX = int(os.getenv("ECNET_FETCH_MAX", "40"))
+_FETCH_GLOBAL = int(os.getenv("ECNET_FETCH_GLOBAL", "300"))
+_fetch_hits: dict[str, list[float]] = {}
+_fetch_all: list[float] = []
+_fetch_limit = _limiter(_FETCH_MAX, _RATE_WINDOW, _fetch_hits, _fetch_all,
+                        _FETCH_GLOBAL, _RATE_GLOBAL_WINDOW, "requests")
+
+
+def _client_ip(request: Request) -> str:
+    """Behind ngrok/a proxy the socket peer is the proxy, so prefer the
+    forwarded chain's first entry -- otherwise every user shares one bucket."""
+    fwd = request.headers.get("x-forwarded-for", "")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _too_many(hits: list[float], limit: int, window: float, now: float) -> Optional[int]:
+    """Prune the window in place; return seconds to wait if it is full."""
+    cutoff = now - window
+    hits[:] = [t for t in hits if t > cutoff]
+    if len(hits) >= limit:
+        return int(hits[0] + window - now) + 1
+    return None
 
 
 _state: dict = {"checkpoint_path": None, "model_version": "ECNet", "predictor": None}
@@ -166,6 +206,13 @@ def health() -> dict:
 
 
 MAX_URL_SECONDS = 60          # only the first minute is fetched and scored
+PREVIEW_SECONDS = 8           # decorative loop behind the scan line
+PREVIEW_HEIGHT = 360
+# Bandwidth ceiling for decoration. With ffmpeg the trim+re-encode lands well
+# under this; without it the untrimmed file blows past and the endpoint 204s,
+# which is the intended degradation -- the poster still shows. Better to serve
+# no preview than multiple MB per analysis over a metered tunnel.
+PREVIEW_MAX_BYTES = 1_500_000
 MAX_URL_BYTES = 200_000_000
 
 
@@ -264,7 +311,7 @@ class AnalyzeUrlIn(BaseModel):
     url: str
 
 
-@app.post("/resolve-url")
+@app.post("/resolve-url", dependencies=[Depends(_fetch_limit)])
 def resolve_url(body: AnalyzeUrlIn) -> dict:
     """Title, uploader, duration and poster for a link -- metadata only.
 
@@ -295,6 +342,88 @@ def resolve_url(body: AnalyzeUrlIn) -> dict:
         "thumbnail": info.get("thumbnail") or None,
         "extractor": info.get("extractor_key") or info.get("extractor") or None,
     }
+
+
+def _shrink_preview(src: Path) -> Path:
+    """Re-encode to a small, fixed-height clip. The source rendition is sized
+    for viewing, but this plays at a few hundred pixels behind a scan line and
+    is streamed on every analysis -- so spend CPU once to save the bandwidth.
+    Returns the original unchanged if ffmpeg is absent or the encode fails."""
+    import subprocess
+
+    if shutil.which("ffmpeg") is None:
+        return src
+    dst = src.with_name("small.mp4")
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-v", "error", "-i", str(src),
+             "-t", str(PREVIEW_SECONDS),
+             "-vf", "scale=-2:360",        # -2 keeps width even, as h264 needs
+             "-c:v", "libx264", "-crf", "32", "-preset", "veryfast",
+             "-movflags", "+faststart",    # play before the whole file arrives
+             "-an", str(dst)],
+            check=True, timeout=90, capture_output=True,
+        )
+    except Exception:
+        return src
+    return dst if dst.exists() and dst.stat().st_size > 1000 else src
+
+
+@app.post("/preview-url", dependencies=[Depends(_fetch_limit)])
+def preview_url(body: AnalyzeUrlIn) -> Response:
+    """A few seconds of low-res video for the scanning view.
+
+    Deliberately NOT the clip the model sees: a separate small-format, short
+    download so the page has motion without streaming the analysis payload
+    twice. 204 when it cannot be produced -- the viewport falls back to the
+    poster, and decoration must never fail an analysis.
+    """
+    url = body.url.strip()
+    _reject_internal_host(url)
+    try:
+        import yt_dlp
+    except ImportError:
+        return Response(status_code=204)
+
+    tmpdir = Path(tempfile.mkdtemp(prefix="ecnet_prev_"))
+    try:
+        # No height filter: portrait clips are e.g. 576x1024, so filtering on
+        # height excludes every vertical video -- most of what gets pasted.
+        # Ask for the smallest rendition instead and let the time trim bound it.
+        opts = {
+            "format": "worstvideo[ext=mp4]/worstvideo/worst[ext=mp4]/worst",
+            "outtmpl": str(tmpdir / "p.%(ext)s"),
+            "noplaylist": True, "quiet": True, "no_warnings": True,
+            "noprogress": True, "socket_timeout": 20,
+        }
+        if shutil.which("ffmpeg"):
+            # a few seconds is small whatever the clip's length
+            opts["download_ranges"] = yt_dlp.utils.download_range_func(
+                None, [(0, PREVIEW_SECONDS)])
+            opts["force_keyframes_at_cuts"] = True
+        else:
+            # cannot trim, so the WHOLE file would arrive -- refuse the big ones.
+            # max_filesize aborts silently, which is the behaviour we want here.
+            opts["max_filesize"] = PREVIEW_MAX_BYTES
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            ydl.extract_info(url, download=True)
+
+        files = [f for f in tmpdir.iterdir() if f.is_file() and f.stat().st_size > 1000]
+        if not files:
+            return Response(status_code=204)
+        best = min(files, key=lambda f: f.stat().st_size)
+        best = _shrink_preview(best)     # a few MB is too much for decoration
+        if best.stat().st_size > PREVIEW_MAX_BYTES:
+            return Response(status_code=204)
+        return Response(
+            best.read_bytes(),
+            media_type="video/mp4",
+            headers={"Cache-Control": "no-store"},
+        )
+    except Exception:
+        return Response(status_code=204)     # never surface preview failures
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 @app.post("/analyze-url", dependencies=[Depends(_rate_limit)])
