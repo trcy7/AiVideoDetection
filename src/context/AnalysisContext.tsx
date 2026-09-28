@@ -106,6 +106,9 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const [lastSavedId, setLastSavedId] = useState<string | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
 
+  // the preview clip's blob, kept so a link analysis has something to store as
+  // its history video -- there is no local file to fall back on
+  const previewBlob = useRef<Blob | null>(null);
   const metadataCleanup = useRef<(() => void) | null>(null);
   const analysisStartedAt = useRef<number>(0);
   const savedToHistory = useRef(false);
@@ -114,6 +117,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const historyStore = useAnalysisHistory();
 
   const dropPreview = useCallback(() => {
+    previewBlob.current = null;
     setPreviewUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return null;
@@ -206,8 +210,10 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         }
         return fetchPreviewClip(url);
       })
-      .then((u) => {
-        if (u) setPreviewUrl(u);
+      .then((blob) => {
+        if (!blob) return;
+        previewBlob.current = blob;
+        setPreviewUrl(URL.createObjectURL(blob));
       });
     analysisStartedAt.current = performance.now();
     setPhase("preprocessing");
@@ -269,8 +275,10 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       setResult(res);
       setPhase("done");
 
-      const url = videoUrl;
-      const blob = file;
+      // a link has no local file, so both the thumbnail grab and the stored
+      // history clip fall back to the preview the scanning view fetched
+      const url = videoUrl ?? previewUrl;
+      const blob: Blob | null = file ?? previewBlob.current;
       const snapshot = { fileSize, metadata };
       // card thumbnail + history persistence
       const poster = sourceMeta?.thumbnail ?? null;
@@ -309,10 +317,10 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
           .catch(() => {});
       }
     },
-    // sourceMeta resolves asynchronously after analyzeUrl starts, so omitting it
-    // here would capture the null it held at render and link history rows would
-    // get no image -- the exact case the poster fallback exists for
-    [videoUrl, file, metadata, historyStore, sourceMeta],
+    // sourceMeta and previewUrl resolve asynchronously after analyzeUrl starts,
+    // so omitting them here would capture the nulls they held at render and link
+    // history rows would get no image and no clip
+    [videoUrl, previewUrl, file, metadata, historyStore, sourceMeta],
   );
 
   // Analyzing (REAL BACKEND): fire the request once on entering this phase,

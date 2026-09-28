@@ -1,4 +1,7 @@
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { HistoryItem, Verdict } from "../../types";
+import { getVideo } from "../../utils/videoStore";
+import { formatScanTime } from "../../utils/videoMetadata";
 import "./HistoryPanel.css";
 
 const VERDICT_SHORT: Record<Verdict, string> = {
@@ -23,17 +26,72 @@ interface HistoryCardProps {
 
 export function HistoryCard({ item, selected, onSelect, onRemove }: HistoryCardProps) {
   const { result } = item;
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const urlRef = useRef<string | null>(null);
+  const pending = useRef(false);
+  const [clipUrl, setClipUrl] = useState<string | null>(null);
+  const [hot, setHot] = useState(false);
+
+  // Blobs load on first hover, not on mount: twenty rows each pulling a clip
+  // out of IndexedDB to sit paused is work nobody asked for. Until then the
+  // poster carries the row.
+  const wake = useCallback(() => {
+    setHot(true);
+    if (urlRef.current || pending.current) return;
+    pending.current = true;
+    getVideo(item.id)
+      .then((blob) => {
+        if (!blob || urlRef.current) return;
+        urlRef.current = URL.createObjectURL(blob);
+        setClipUrl(urlRef.current);
+      })
+      .finally(() => {
+        pending.current = false;
+      });
+  }, [item.id]);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || !clipUrl) return;
+    if (hot) void v.play().catch(() => {});
+    else {
+      v.pause();
+      v.currentTime = 0;
+    }
+  }, [hot, clipUrl]);
+
+  useEffect(
+    () => () => {
+      if (urlRef.current) URL.revokeObjectURL(urlRef.current);
+    },
+    [],
+  );
+
   return (
     <div className={`hcard hcard--${result.verdict}${selected ? " is-selected" : ""}`}>
       <button
         type="button"
         className="hcard__body"
         onClick={() => onSelect(item)}
+        onMouseEnter={wake}
+        onMouseLeave={() => setHot(false)}
+        onFocus={wake}
+        onBlur={() => setHot(false)}
         aria-pressed={selected}
         aria-label={`Open analysis of ${result.fileName}: ${VERDICT_SHORT[result.verdict]}, ${Math.round(result.confidence)} percent confidence`}
       >
         <span className="hcard__thumb" aria-hidden="true">
-          {item.thumbnail ? (
+          {clipUrl ? (
+            <video
+              ref={videoRef}
+              src={clipUrl}
+              poster={item.thumbnail ?? undefined}
+              muted
+              loop
+              playsInline
+              preload="metadata"
+            />
+          ) : item.thumbnail ? (
             <img src={item.thumbnail} alt="" loading="lazy" />
           ) : (
             <svg viewBox="0 0 24 24" fill="none">
@@ -55,7 +113,7 @@ export function HistoryCard({ item, selected, onSelect, onRemove }: HistoryCardP
           </span>
           <span className="hcard__row hcard__row--meta">
             <span>{shortDate(item.savedAt)}</span>
-            <span>{(result.processingMs / 1000).toFixed(1)}s</span>
+            <span>{formatScanTime(result.processingMs)}</span>
           </span>
         </span>
       </button>

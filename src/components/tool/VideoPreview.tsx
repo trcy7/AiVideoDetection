@@ -8,7 +8,6 @@ interface VideoPreviewProps {
   fileSize: number;
   metadata: VideoMetadata;
   verdict: Verdict;
-  frameCount: number;
   /** Live analyses have the object URL; history restores only a thumbnail. */
   videoUrl: string | null;
   thumbnail: string | null;
@@ -27,7 +26,6 @@ export function VideoPreview({
   fileSize,
   metadata,
   verdict,
-  frameCount,
   videoUrl,
   thumbnail,
 }: VideoPreviewProps) {
@@ -40,7 +38,6 @@ export function VideoPreview({
       label: "Duration",
       value: metadata.duration !== null ? formatDuration(metadata.duration) : DASH,
     },
-    { label: "Frames", value: `${frameCount} analyzed` },
     { label: "Size", value: fileSize > 0 ? formatBytes(fileSize) : DASH },
   ];
 

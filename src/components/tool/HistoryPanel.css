@@ -236,10 +236,13 @@
   color: var(--color-text-muted);
 }
 
-.hcard__thumb img {
+.hcard__thumb img,
+.hcard__thumb video {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
+  background: var(--color-surface-sunken);
 }
 
 .hcard__thumb svg {

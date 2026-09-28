@@ -52,7 +52,6 @@ export function ResultsView({
           fileSize={fileSize}
           metadata={metadata}
           verdict={result.verdict}
-          frameCount={result.frames.length}
           videoUrl={videoUrl}
           thumbnail={thumbnail}
         />

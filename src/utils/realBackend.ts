@@ -98,10 +98,11 @@ export async function resolveUrlMeta(url: string): Promise<LinkMeta | null> {
   }
 }
 
-/** A few seconds of low-res video for the scanning view, as an object URL.
- *  Null when the server declines (204) or anything fails -- the viewport then
- *  keeps its poster. The caller owns the URL and must revoke it. */
-export async function fetchPreviewClip(url: string): Promise<string | null> {
+/** A few seconds of low-res video for the scanning view. Returns the blob, not
+ *  an object URL: the caller shows it AND persists it as the history clip for a
+ *  link, which has no local file to store. Null when the server declines (204)
+ *  or anything fails -- the viewport then keeps its poster. */
+export async function fetchPreviewClip(url: string): Promise<Blob | null> {
   if (BACKEND_URL_ERROR) return null;
   try {
     const res = await fetch(`${BACKEND_URL}/preview-url`, {
@@ -111,7 +112,7 @@ export async function fetchPreviewClip(url: string): Promise<string | null> {
     });
     if (!res.ok || res.status === 204) return null;
     const blob = await res.blob();
-    return blob.size > 0 ? URL.createObjectURL(blob) : null;
+    return blob.size > 0 ? blob : null;
   } catch {
     return null;
   }

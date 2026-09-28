@@ -1,5 +1,6 @@
 import type { AnalysisResult } from "../../types";
 import { cleanModelVersion } from "../../utils/realBackend";
+import { formatScanTime } from "../../utils/videoMetadata";
 import "./ResultHeader.css";
 
 interface ResultHeaderProps {
@@ -8,8 +9,7 @@ interface ResultHeaderProps {
 
 export function ResultHeader({ result }: ResultHeaderProps) {
   const meta = [
-    { label: "Scan time", value: `${(result.processingMs / 1000).toFixed(1)}s` },
-    { label: "Frames", value: String(result.frames.length) },
+    { label: "Scan time", value: formatScanTime(result.processingMs) },
     { label: "Model", value: cleanModelVersion(result.modelVersion) },
     { label: "Completed", value: new Date(result.analyzedAt).toLocaleString() },
   ];

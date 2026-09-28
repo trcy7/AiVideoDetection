@@ -141,7 +141,9 @@
 .vpreview__meta {
   margin: 0;
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  /* three cells that reflow on their own -- a fixed column count leaves an
+     orphan on the second row at the widths this panel actually gets */
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
   gap: var(--space-3);
 }
 
@@ -155,7 +157,6 @@
 
 @media (max-width: 420px) {
   .vpreview__meta {
-    grid-template-columns: 1fr;
     gap: var(--space-2);
   }
 }

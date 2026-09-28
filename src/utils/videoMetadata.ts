@@ -163,6 +163,20 @@ export function estimateFrameRate(
   };
 }
 
+/** Wall-clock scan time. A long scan shown as "184.3s" makes the reader do
+ *  the division, so anything past a minute reads as minutes and seconds. */
+export function formatScanTime(ms: number): string {
+  const total = Math.max(0, ms) / 1000;
+  if (total < 60) return `${total.toFixed(1)}s`;
+  let mins = Math.floor(total / 60);
+  let secs = Math.round(total - mins * 60);
+  if (secs === 60) {
+    mins += 1;
+    secs = 0;
+  }
+  return `${mins}m ${String(secs).padStart(2, "0")}s`;
+}
+
 export function formatDuration(seconds: number): string {
   const mins = Math.floor(seconds / 60);
   const secs = seconds - mins * 60;
