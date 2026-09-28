@@ -62,10 +62,22 @@ export function VerdictCard({ result }: VerdictCardProps) {
           <VerdictIcon verdict={result.verdict} />
           {copy.label}
         </span>
-        <span className="verdict-card__confidence">
-          {result.confidence.toFixed(1)}%
-          <span className="verdict-card__confidence-label"> confidence</span>
-        </span>
+        <div className="verdict-card__stats">
+          {/* The score is what the bands are applied to, so it is shown with
+              the threshold that decided the verdict -- on its own the number
+              says nothing. Confidence is a separate quantity: how decisive and
+              consistent the evidence was, not how AI-like. */}
+          <span className="verdict-card__stat">
+            <b>{result.fakeScore.toFixed(1)}</b>
+            <small>
+              score · AI above {(result.bands?.fakeAbove ?? 65).toFixed(0)}
+            </small>
+          </span>
+          <span className="verdict-card__stat">
+            <b>{result.confidence.toFixed(1)}%</b>
+            <small>confidence</small>
+          </span>
+        </div>
       </div>
 
       <p className="verdict-card__description">{copy.description}</p>
