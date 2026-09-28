@@ -12,13 +12,14 @@ import ipaddress
 import os
 import shutil
 import socket
+import threading
 import tempfile
 import time
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -40,6 +41,49 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+# Each /analyze occupies the GPU for seconds, so an unthrottled public URL is
+# someone else's free compute. Sliding window per client, in process -- no
+# dependency, and the server is single-instance by design (SQLite tolerates one
+# writer). ECNET_RATE_MAX=0 disables it for local work.
+_RATE_MAX = int(os.getenv("ECNET_RATE_MAX", "12"))
+_RATE_WINDOW = int(os.getenv("ECNET_RATE_WINDOW", "600"))
+_hits: dict[str, list[float]] = {}
+_hits_lock = threading.Lock()
+
+
+def _client_ip(request: Request) -> str:
+    """Behind ngrok/a proxy the socket peer is the proxy, so prefer the
+    forwarded chain's first entry -- the original client."""
+    fwd = request.headers.get("x-forwarded-for", "")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _rate_limit(request: Request) -> None:
+    if _RATE_MAX <= 0:
+        return
+    now = time.time()
+    cutoff = now - _RATE_WINDOW
+    ip = _client_ip(request)
+    with _hits_lock:
+        recent = [t for t in _hits.get(ip, ()) if t > cutoff]
+        if len(recent) >= _RATE_MAX:
+            _hits[ip] = recent
+            retry = int(recent[0] + _RATE_WINDOW - now) + 1
+            raise HTTPException(
+                429,
+                f"Rate limit: {_RATE_MAX} analyses per {_RATE_WINDOW // 60} minutes. "
+                f"Try again in {retry}s.",
+                headers={"Retry-After": str(retry)},
+            )
+        recent.append(now)
+        _hits[ip] = recent
+        if len(_hits) > 5000:          # bound memory; drop buckets gone idle
+            for k in [k for k, v in _hits.items() if not v or v[-1] <= cutoff]:
+                _hits.pop(k, None)
+
 
 _state: dict = {"checkpoint_path": None, "model_version": "ECNet", "predictor": None}
 
@@ -187,7 +231,7 @@ class AnalyzeUrlIn(BaseModel):
     url: str
 
 
-@app.post("/analyze-url")
+@app.post("/analyze-url", dependencies=[Depends(_rate_limit)])
 def analyze_url(body: AnalyzeUrlIn) -> dict:
     """Analyze a public video link (YouTube/TikTok/Instagram/Facebook/direct).
     Only the first minute is fetched; the file is deleted after scoring."""
@@ -203,7 +247,7 @@ def analyze_url(body: AnalyzeUrlIn) -> dict:
         shutil.rmtree(tmpdir, ignore_errors=True)   # the download never persists
 
 
-@app.post("/analyze")
+@app.post("/analyze", dependencies=[Depends(_rate_limit)])
 async def analyze(video: UploadFile = File(...)) -> dict:
     raw = await video.read()
     # identify a repeat upload without ever storing the video itself
@@ -304,8 +348,9 @@ def main() -> None:
                         help="score below this = 'real' (overrides the checkpoint)")
     parser.add_argument("--fake-above", type=float, default=None,
                         help="score above this = 'AI' (overrides the checkpoint), e.g. 80")
-    parser.add_argument("--db", default="data/ecnet.db",
-                        help="SQLite file for the analysis audit trail + feedback")
+    parser.add_argument("--db", default=os.getenv("ECNET_DB", "data/ecnet.db"),
+                        help="SQLite file for the analysis audit trail + feedback "
+                             "(env: ECNET_DB)")
     parser.add_argument("--no-db", action="store_true", help="run without any storage")
     # Inference cost knobs: fewer windows = faster, slightly less clip coverage.
     # Essential on CPU-only hosts, where the default 48 is far too slow.

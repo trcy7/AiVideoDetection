@@ -25,6 +25,8 @@ ENV ECNET_HOST=0.0.0.0 \
     PORT=8000 \
     ECNET_CHECKPOINT=/models/ECNet-7.pt \
     ECNET_DB=/data/ecnet.db \
+    ECNET_RATE_MAX=12 \
+    ECNET_RATE_WINDOW=600 \
     PYTHONUNBUFFERED=1
 
 # Persist the audit trail + feedback across restarts.
@@ -34,5 +36,7 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=180s --retries=3 \
   CMD curl -fsS "http://127.0.0.1:${PORT}/health" || exit 1
 
+# No CMD: --db now reads ECNET_DB, and a default flag here would override it,
+# making `-e ECNET_DB=...` silently do nothing. Extra args still pass through:
+#   docker run ecnet --max-score-windows 12
 ENTRYPOINT ["entrypoint"]
-CMD ["--db", "/data/ecnet.db"]
