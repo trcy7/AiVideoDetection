@@ -48,12 +48,14 @@ app.add_middleware(
 #   per-client  -- one person hammering the endpoint
 #   global      -- the GPU quota is shared, so ten clients each politely at
 #                  their own limit still drain it; per-IP alone cannot see that
-# Defaults assume ~25 s/analysis: 4/10min per client, 30/hour overall, so the
-# worst case is roughly 12 GPU-minutes per hour against a ~30 h/week quota.
+# Per-client is set to the real demo rate -- 12 in 10 minutes -- so normal use
+# never sees a 429. That is deliberately generous, which is why the global
+# ceiling exists: it is not a quota guarantee, it is a runaway stop for the
+# case where several clients sustain the per-client rate at once.
 # ECNET_RATE_MAX=0 disables both for local work.
-_RATE_MAX = int(os.getenv("ECNET_RATE_MAX", "4"))
+_RATE_MAX = int(os.getenv("ECNET_RATE_MAX", "12"))
 _RATE_WINDOW = int(os.getenv("ECNET_RATE_WINDOW", "600"))
-_RATE_GLOBAL = int(os.getenv("ECNET_RATE_GLOBAL", "30"))
+_RATE_GLOBAL = int(os.getenv("ECNET_RATE_GLOBAL", "120"))
 _RATE_GLOBAL_WINDOW = int(os.getenv("ECNET_RATE_GLOBAL_WINDOW", "3600"))
 
 # One GPU, so inference is serialised. The lock is what makes running these
