@@ -176,6 +176,14 @@ export async function analyzeWithBackend(file: File): Promise<BackendAnalysis> {
     } catch {
       /* non-JSON error body — keep statusText */
     }
+    if (res.status === 502 || res.status === 503 || res.status === 504) {
+      // ngrok closes the request at 300 s (ERR_NGROK_3004). The server is
+      // usually alive and still working -- it is the analysis that overran,
+      // which is what a CPU-only session looks like from out here.
+      detail =
+        "the analysis took longer than the tunnel allows (5 min). " +
+        "The backend may be running on CPU instead of GPU.";
+    }
     if (res.status === 405) {
       // Static hosts reject POST; the request never reached the backend.
       detail =

@@ -201,8 +201,15 @@ def health() -> dict:
     if pred is not None:
         icfg = pred.cfg["inference"]
         bands = {"realBelow": icfg.get("verdict_real_below"), "fakeAbove": icfg.get("verdict_fake_above")}
+    # device and coverage belong here: a session that came back on CPU looks
+    # identical to a healthy one until an analysis silently overruns ngrok's
+    # 300 s ceiling and returns ERR_NGROK_3004 with nothing to point at.
+    icfg = pred.cfg["inference"] if pred is not None else {}
     return {"status": "ok", "checkpoint": str(_state["checkpoint_path"]), "bands": bands,
-            "storage": db.enabled()}
+            "storage": db.enabled(),
+            "device": str(getattr(pred, "device", "")) or None,
+            "scoreWindows": icfg.get("max_score_windows"),
+            "camWindows": icfg.get("max_cam_windows")}
 
 
 MAX_URL_SECONDS = 60          # only the first minute is fetched and scored
