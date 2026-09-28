@@ -111,6 +111,11 @@ _INFERENCE_DEFAULTS = {
     "max_score_windows": 48,   # tile the WHOLE clip up to this many windows
     "max_cam_windows": 8,      # per-frame GradCAM/heatmap only on this many (cost cap)
     "cam_threshold": 0.60,
+    # A CAM is renormalised to 0-1 per frame, so its peak is 1.0 whatever the
+    # absolute evidence -- on a clip scoring 1.1 the "flagged" regions are just
+    # the relative maximum of nearly nothing. Emit boxes only where the frame
+    # itself leans AI, so a real verdict stops drawing accusations.
+    "cam_min_prob": 0.50,
     "max_boxes": 3,
     "verdict_real_below": 35,
     "verdict_fake_above": 65,
@@ -267,7 +272,9 @@ def _predict_hybrid(video_path: str | Path, model, cfg: dict, device: torch.devi
                 continue
             prob, cam = _gradcam(model, x)        # spatial branch: per-frame prob + CAM
             frame_probs[int(src_idx)] = prob
-            boxes = _cam_to_boxes(cam, float(icfg["cam_threshold"]), int(icfg["max_boxes"]))
+            # gate on absolute evidence, not the frame-relative peak
+            boxes = (_cam_to_boxes(cam, float(icfg["cam_threshold"]), int(icfg["max_boxes"]))
+                     if prob >= float(icfg.get("cam_min_prob", 0.5)) else [])
             if box is not None:
                 t, b, l, r = box
                 cw, ch = (r - l) / full_w, (b - t) / full_h
@@ -303,6 +310,14 @@ def _predict_hybrid(video_path: str | Path, model, cfg: dict, device: torch.devi
         verdict = "fake"
     else:
         verdict = "uncertain"
+
+    # Boxes come from the spatial branch's per-frame opinion, but the verdict is
+    # the fused mean over windows -- so a clip judged real can still contain
+    # frames that lean AI, and the heatmap ends up contradicting the headline.
+    # A "real" verdict draws no accusations; uncertain and fake keep theirs.
+    if verdict == "real":
+        for e in frame_entries.values():
+            e["boxes"] = []
 
     # ascending time + contiguous indices for the UI scrubber
     ordered = [frame_entries[k] for k in sorted(frame_entries)]
