@@ -1,4 +1,4 @@
-/* ---- bento grid: one hero card, two compact, one full-width ---- */
+/* ---- bento grid: one hero card, two compact ---- */
 
 .features {
   display: grid;
@@ -10,10 +10,6 @@
 .feature-card--hero {
   grid-column: 1 / 3;
   grid-row: 1 / 3;
-}
-
-.feature-card--wide {
-  grid-column: 1 / 4;
 }
 
 .feature-card {
@@ -139,22 +135,6 @@
 
 /* ---- full-width card: icon beside text ---- */
 
-.feature-card--wide {
-  flex-direction: row;
-  align-items: center;
-  gap: var(--space-4);
-}
-
-.feature-card--wide .feature-card__icon {
-  margin-bottom: 0;
-}
-
-.feature-card__wide-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
 /* ---- responsive: bento -> 2 columns -> single column ---- */
 
 @media (max-width: 1000px) {
@@ -166,10 +146,6 @@
     grid-column: 1 / 3;
     grid-row: auto;
   }
-
-  .feature-card--wide {
-    grid-column: 1 / 3;
-  }
 }
 
 @media (max-width: 560px) {
@@ -177,13 +153,7 @@
     grid-template-columns: 1fr;
   }
 
-  .feature-card--hero,
-  .feature-card--wide {
+  .feature-card--hero {
     grid-column: 1;
-  }
-
-  .feature-card--wide {
-    flex-direction: column;
-    align-items: flex-start;
   }
 }

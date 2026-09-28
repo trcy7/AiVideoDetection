@@ -27,18 +27,6 @@ const ClockIcon = (
   </svg>
 );
 
-const MotionIcon = (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    <path
-      d="M3 12h3l2.4-6 3.4 13 2.9-9 2 5H21"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-
 /** Mini GradCAM-style heatmap: a cell grid with a glowing hotspot + a
  *  dashed detection box that slowly tracks. Purely decorative. */
 function HeatmapViz() {
@@ -116,18 +104,6 @@ export function Features() {
               Scenes are tracked across time for the flicker, morphing, and
               drift generators struggle to hold steady.
             </p>
-          </article>
-
-          <article className="feature-card feature-card--wide card-hover">
-            <div className="feature-card__icon">{MotionIcon}</div>
-            <div className="feature-card__wide-body">
-              <h3 className="feature-card__title">Motion &amp; flicker analysis</h3>
-              <p className="feature-card__description">
-                Frame-to-frame residuals measure how the picture changes. Real
-                motion is smooth and consistent; AI motion is erratic — the
-                variance gives it away.
-              </p>
-            </div>
           </article>
         </div>
       </div>

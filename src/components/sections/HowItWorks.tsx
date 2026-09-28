@@ -37,30 +37,6 @@ function TemporalArt() {
   );
 }
 
-/** Motion: a field of frame-to-frame difference vectors. */
-function MotionArt() {
-  const cells = Array.from({ length: 15 }, (_, i) => {
-    const col = i % 5;
-    const row = Math.floor(i / 5);
-    return {
-      x: 22 + col * 30,
-      y: 30 + row * 32,
-      angle: Math.sin(col * 0.9 + row * 0.7) * 26,
-      delay: (col + row) * 0.14,
-    };
-  });
-  return (
-    <svg viewBox="0 0 160 120" className="branch-art branch-art--motion" aria-hidden="true">
-      {cells.map((c, i) => (
-        <g key={i} transform={`translate(${c.x} ${c.y}) rotate(${c.angle})`} style={{ animationDelay: `${c.delay}s` }}>
-          <line x1="-9" y1="0" x2="7" y2="0" />
-          <path d="M3 -4l6 4-6 4" />
-        </g>
-      ))}
-    </svg>
-  );
-}
-
 const BRANCHES = [
   {
     step: "01",
@@ -78,14 +54,6 @@ const BRANCHES = [
       "Tracks how features evolve across the clip, catching flicker, drift, and objects that morph over time.",
     art: <TemporalArt />,
   },
-  {
-    step: "03",
-    title: "Motion",
-    tech: "Frame residuals",
-    description:
-      "Measures frame-to-frame change. Real motion is smooth and consistent; AI motion is erratic — the variance exposes it.",
-    art: <MotionArt />,
-  },
 ];
 
 export function HowItWorks() {
@@ -94,11 +62,11 @@ export function HowItWorks() {
   return (
     <section id="technology" className="section reveal" ref={ref}>
       <div className="container">
-        <span className="hud-label section__eyebrow">Three-branch architecture</span>
+        <span className="hud-label section__eyebrow">Two-branch architecture</span>
         <h2 className="section__heading">How it works</h2>
         <p className="section__subheading">
-          ECNet reads three independent signals from every clip — spatial,
-          temporal, and motion — and fuses them into one calibrated verdict.
+          ECNet reads two independent signals from every clip — spatial and
+          temporal — and fuses them into one calibrated verdict.
         </p>
 
         <div className="branches">
@@ -123,8 +91,6 @@ export function HowItWorks() {
           <span className="fusion__node">Spatial</span>
           <span className="fusion__plus">+</span>
           <span className="fusion__node">Temporal</span>
-          <span className="fusion__plus">+</span>
-          <span className="fusion__node">Motion</span>
           <span className="fusion__arrow" aria-hidden="true">→</span>
           <span className="fusion__verdict">Fused verdict</span>
         </div>

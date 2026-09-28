@@ -235,7 +235,7 @@ export function buildReportUrl(r: {
     ? `Calibrated thresholds for this model: real below ${r.bands.realBelow}, AI generated above ${r.bands.fakeAbove}.`
     : "";
   const ASSESS: Record<Verdict, string> = {
-    real: `ECNet found no consistent evidence of synthetic generation in this clip. Per-frame texture and inter-frame motion both behaved like camera-captured footage across the frames analyzed. ${bandsTxt}`,
+    real: `ECNet found no consistent evidence of synthetic generation in this clip. Per-frame texture and inter-frame consistency both behaved like camera-captured footage across the frames analyzed. ${bandsTxt}`,
     fake: `ECNet detected artifacts consistent with an AI video generator. The evidence was present across the sampled frames rather than isolated to a single moment, and the highlighted regions below mark where it was strongest. ${bandsTxt}`,
     uncertain: `The evidence for this clip was mixed. Its score falls between the calibrated thresholds, so ECNet does not issue a definitive call. Treat this result as inconclusive and review the flagged frames manually. ${bandsTxt}`,
   };
@@ -257,7 +257,7 @@ export function buildReportUrl(r: {
   }
 
   // branch scores as bars, coloured by the VERDICT so the report matches the
-  // results page exactly (Motion hidden there too)
+  // results page exactly (the motion branch is not surfaced in either)
   const barColor = ZONE[r.verdict];
   y -= 16;
   fill(MUT); t(L, y, 9, "BRANCH SCORES", true); y -= 24;

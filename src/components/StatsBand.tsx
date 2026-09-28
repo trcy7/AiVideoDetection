@@ -14,7 +14,7 @@ const STATS: Stat[] = [
   { value: 785824, decimals: 0, suffix: "", label: "Frames analyzed", group: true },
   { value: 13, decimals: 0, suffix: "", label: "Generator models" },
   { value: 32, decimals: 0, suffix: "", label: "Frames per scan" },
-  { value: 3, decimals: 0, suffix: "", label: "Analysis branches" },
+  { value: 2, decimals: 0, suffix: "", label: "Analysis branches" },
 ];
 
 const COUNT_MS = 1400;
