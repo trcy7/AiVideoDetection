@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState, type DragEvent } from "react";
 import {
   ACCEPTED_EXTENSIONS,
+  MAX_DURATION_SECONDS,
   checkVideoDuration,
   validateVideoFile,
 } from "../../utils/validateVideoFile";
@@ -124,7 +125,10 @@ export function UploadDropzone({ onFileAccepted }: UploadDropzoneProps) {
           </p>
         )}
         <p className="dropzone__hint">
-          {ACCEPTED_EXTENSIONS.join(" · ")} · up to 1 minute
+          <span className="dropzone__chip">
+            {ACCEPTED_EXTENSIONS.map((ext) => ext.slice(1)).join(" · ")}
+          </span>
+          <span className="dropzone__chip">max {MAX_DURATION_SECONDS}s</span>
         </p>
       </div>
 
