@@ -87,11 +87,6 @@ export function ResultsPage() {
                   <span />
                   <span />
                 </div>
-                <span className="scan__badge" aria-hidden="true">
-                  <span className="scan__badge-dot" />
-                  ANALYZING
-                  {a.phase === "analyzing" ? ` · ${Math.round(a.progress)}%` : ""}
-                </span>
               </div>
 
               <div className="scan__panel">
