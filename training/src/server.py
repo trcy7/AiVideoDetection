@@ -22,6 +22,7 @@ from urllib.parse import urlparse
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 
 from . import db
 from .inference import Predictor
@@ -42,46 +43,75 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Each /analyze occupies the GPU for seconds, so an unthrottled public URL is
-# someone else's free compute. Sliding window per client, in process -- no
-# dependency, and the server is single-instance by design (SQLite tolerates one
-# writer). ECNET_RATE_MAX=0 disables it for local work.
-_RATE_MAX = int(os.getenv("ECNET_RATE_MAX", "12"))
+# Each analysis holds the GPU for tens of seconds, so a public URL is someone
+# else's free compute. Two ceilings, because they stop different things:
+#   per-client  -- one person hammering the endpoint
+#   global      -- the GPU quota is shared, so ten clients each politely at
+#                  their own limit still drain it; per-IP alone cannot see that
+# Defaults assume ~25 s/analysis: 4/10min per client, 30/hour overall, so the
+# worst case is roughly 12 GPU-minutes per hour against a ~30 h/week quota.
+# ECNET_RATE_MAX=0 disables both for local work.
+_RATE_MAX = int(os.getenv("ECNET_RATE_MAX", "4"))
 _RATE_WINDOW = int(os.getenv("ECNET_RATE_WINDOW", "600"))
+_RATE_GLOBAL = int(os.getenv("ECNET_RATE_GLOBAL", "30"))
+_RATE_GLOBAL_WINDOW = int(os.getenv("ECNET_RATE_GLOBAL_WINDOW", "3600"))
+
+# One GPU, so inference is serialised. The lock is what makes running these
+# handlers off the event loop safe: without it two uploads would hit the card
+# at once and risk an OOM.
+_infer_lock = threading.Lock()
+
 _hits: dict[str, list[float]] = {}
+_all_hits: list[float] = []
 _hits_lock = threading.Lock()
 
 
 def _client_ip(request: Request) -> str:
     """Behind ngrok/a proxy the socket peer is the proxy, so prefer the
-    forwarded chain's first entry -- the original client."""
+    forwarded chain's first entry -- otherwise every user shares one bucket."""
     fwd = request.headers.get("x-forwarded-for", "")
     if fwd:
         return fwd.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
 
 
+def _too_many(hits: list[float], limit: int, window: float, now: float) -> Optional[int]:
+    """Prune the window in place; return seconds to wait if it is full."""
+    cutoff = now - window
+    hits[:] = [t for t in hits if t > cutoff]
+    if len(hits) >= limit:
+        return int(hits[0] + window - now) + 1
+    return None
+
+
 def _rate_limit(request: Request) -> None:
     if _RATE_MAX <= 0:
         return
     now = time.time()
-    cutoff = now - _RATE_WINDOW
     ip = _client_ip(request)
     with _hits_lock:
-        recent = [t for t in _hits.get(ip, ()) if t > cutoff]
-        if len(recent) >= _RATE_MAX:
-            _hits[ip] = recent
-            retry = int(recent[0] + _RATE_WINDOW - now) + 1
+        mine = _hits.setdefault(ip, [])
+        retry = _too_many(mine, _RATE_MAX, _RATE_WINDOW, now)
+        if retry is not None:
             raise HTTPException(
                 429,
-                f"Rate limit: {_RATE_MAX} analyses per {_RATE_WINDOW // 60} minutes. "
+                f"Rate limit: {_RATE_MAX} analyses per {_RATE_WINDOW // 60} min. "
                 f"Try again in {retry}s.",
                 headers={"Retry-After": str(retry)},
             )
-        recent.append(now)
-        _hits[ip] = recent
+        retry = _too_many(_all_hits, _RATE_GLOBAL, _RATE_GLOBAL_WINDOW, now)
+        if retry is not None:
+            raise HTTPException(
+                429,
+                f"The service is at capacity ({_RATE_GLOBAL} analyses/hour). "
+                f"Try again in {retry}s.",
+                headers={"Retry-After": str(retry)},
+            )
+        mine.append(now)
+        _all_hits.append(now)
         if len(_hits) > 5000:          # bound memory; drop buckets gone idle
-            for k in [k for k, v in _hits.items() if not v or v[-1] <= cutoff]:
+            stale = now - _RATE_WINDOW
+            for k in [k for k, v in _hits.items() if not v or v[-1] <= stale]:
                 _hits.pop(k, None)
 
 
@@ -146,7 +176,8 @@ def _analyze_path(path: Path, file_hash: str) -> dict:
     analyze_path = _normalize_upload(path)       # HDR -> SDR when ffmpeg is present
     started = time.perf_counter()
     try:
-        result = predictor.predict(analyze_path)  # resident model -> no per-request reload
+        with _infer_lock:
+            result = predictor.predict(analyze_path)  # resident; no per-request reload
     except ValueError as e:
         raise HTTPException(422, f"Could not analyze video: {e}")
     finally:
@@ -258,7 +289,9 @@ async def analyze(video: UploadFile = File(...)) -> dict:
         tmp.write(raw)
         tmp_path = Path(tmp.name)
     try:
-        return _analyze_path(tmp_path, file_hash)
+        # predict() blocks for tens of seconds. On the event loop that freezes
+        # every other request, /health included -- so hand it to a worker.
+        return await run_in_threadpool(_analyze_path, tmp_path, file_hash)
     finally:
         tmp_path.unlink(missing_ok=True)            # the upload never persists
 
