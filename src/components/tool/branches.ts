@@ -19,14 +19,14 @@ export function branchList(scores: BranchScores): BranchRow[] {
       name: "Spatial",
       model: "EfficientNet-B4",
       value: scores.spatial,
-      description: "Reads each frame whole for generator artifacts — sliding textures, impossible detail, lighting that breaks.",
+      description: "Per-frame texture, structure and lighting artifacts.",
     },
     {
       id: "temporal",
       name: "Temporal",
       model: "ConvLSTM",
       value: scores.opticalFlow,
-      description: "Tracks how features evolve across the clip, catching flicker, drift and objects that morph over time.",
+      description: "Frame-to-frame consistency across each 16-frame window.",
     },
   ];
   if (scores.frequency != null) {
@@ -35,7 +35,7 @@ export function branchList(scores: BranchScores): BranchRow[] {
       name: "Frequency",
       model: "FFT",
       value: scores.frequency,
-      description: "Reads the frame's frequency spectrum for the periodic fingerprints a generator's upsampling leaves behind.",
+      description: "Periodic spectral artifacts from generator upsampling.",
     });
   }
   return rows;

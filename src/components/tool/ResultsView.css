@@ -7,7 +7,6 @@
 .rview__main {
   display: grid;
   gap: clamp(var(--space-4), 2vw, var(--space-5));
-  align-items: start;
 }
 
 .rview__side {
@@ -46,10 +45,23 @@
   margin-top: var(--space-2);
 }
 
-/* Desktop: evidence left, breakdown + details right */
+/* Desktop: heatmap left, breakdown + details right.
+   The grid rows stretch, so the heatmap card is exactly as tall as the two
+   cards beside it. Its stage drops the fixed aspect ratio and takes whatever
+   height the row gives it -- the canvas letterboxes inside either way, and
+   the fit observer recomputes on resize. */
 @media (min-width: 1080px) {
   .rview__main {
     grid-template-columns: minmax(0, 1fr) 372px;
+  }
+  .rview__evidence .heatmap {
+    flex: 1;
+    min-height: 0;
+  }
+  .rview__evidence .heatmap__stage {
+    flex: 1;
+    aspect-ratio: auto;
+    min-height: 260px;
   }
 }
 

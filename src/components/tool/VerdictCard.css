@@ -122,92 +122,23 @@
   color: var(--color-text-muted);
 }
 
-.vc__scale {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+.vc__panel .gauge {
+  width: 100%;
+  max-width: 260px;
+  margin-inline: auto;
 }
 
-.vc__scale-labels {
-  display: flex;
-  font-size: var(--text-xs);
-  font-weight: 500;
-  color: var(--color-text-muted);
-}
-
-.vc__scale-labels > span {
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-/* the AI zone is the narrow one; keep its label inside the page */
-.vc__scale-labels > span:last-child {
-  text-align: right;
-}
-
-.vc__scale-labels .is-active {
-  font-weight: 600;
-  color: var(--color-text);
-}
-
-.vc__short {
-  display: none;
-}
-
-.vc__track {
-  position: relative;
-  height: 10px;
-}
-
-.vc__zones {
-  display: flex;
-  gap: 2px;
-  height: 100%;
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.vc__zone { display: block; height: 100%; }
-.vc__zone--real { background: var(--color-real-border); }
-.vc__zone--uncertain { background: var(--color-uncertain-border); }
-.vc__zone--fake { background: var(--color-fake-mark); }
-
-.vc__marker {
-  position: absolute;
-  top: -6px;
-  width: 4px;
-  height: 22px;
-  margin-left: -2px;
-  border-radius: 2px;
-  background: var(--color-text);
-  box-shadow: 0 0 0 2px var(--color-surface);
-}
-
-.vc__ticks {
-  position: relative;
-  height: 15px;
+/* the dial shows position, not the numbers behind it */
+.vc__bands {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
-  line-height: 15px;
+  text-align: center;
   color: var(--color-text-muted);
 }
 
-/* The two thresholds can sit 5 points apart, so centring both would overlap
-   them on a narrow card. Each grows AWAY from the boundary instead: the lower
-   number ends just left of its mark, the upper starts just right of its own. */
-.vc__ticks span {
-  position: absolute;
-  top: 0;
-  white-space: nowrap;
-}
-
-.vc__ticks span:first-child {
-  transform: translateX(-100%);
-  padding-right: 5px;
-}
-
-.vc__ticks span:last-child {
-  padding-left: 5px;
+.vc__bands b {
+  font-weight: 600;
+  color: var(--color-text);
 }
 
 @media (min-width: 960px) {
@@ -222,9 +153,6 @@
     height: 48px;
     border-radius: var(--radius-md);
   }
-  /* "Uncertain" does not fit a 5%-wide label column on a phone */
-  .vc__long { display: none; }
-  .vc__short { display: inline; }
 }
 
 @media (max-width: 380px) {

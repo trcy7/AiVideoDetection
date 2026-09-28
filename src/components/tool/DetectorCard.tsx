@@ -58,11 +58,6 @@ export function DetectorCard({ result }: DetectorCardProps) {
           </li>
         ))}
       </ul>
-
-      <p className="dcard__note">
-        <span className="dcard__swatch" aria-hidden="true" />
-        Marker shows the AI threshold ({hi})
-      </p>
     </section>
   );
 }

@@ -1,6 +1,7 @@
 import type { AnalysisResult, Verdict } from "../../types";
 import { DEFAULT_BANDS } from "../../utils/bands";
 import { branchList } from "./branches";
+import { ConfidenceGauge } from "./ConfidenceGauge";
 import "./VerdictCard.css";
 
 interface VerdictCardProps {
@@ -18,8 +19,6 @@ const GLYPH: Record<Verdict, string> = {
   fake: "M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01",
   uncertain: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.1 9a3 3 0 0 1 5.8 1c0 2-3 2.5-3 4M12 17h.01",
 };
-
-const clamp = (n: number) => Math.min(100, Math.max(0, n));
 
 /** One sentence that says what the score means, in terms of the bands that
  *  produced it -- the number alone tells the reader nothing. */
@@ -44,22 +43,6 @@ export function VerdictCard({ result }: VerdictCardProps) {
   const hi = result.bands?.fakeAbove ?? DEFAULT_BANDS.fakeAbove;
   const branches = branchList(result.branchScores);
   const above = branches.filter((b) => b.value !== null && b.value >= hi).length;
-
-  // The uncertain band is only as wide as the calibration makes it -- 5 points
-  // here. Its label cannot fit that column, and forcing it wraps "Uncertain"
-  // down three lines, so below 15 points the zone goes unlabelled: the two
-  // ticks bracket it and the verdict text names it.
-  const roomForMiddle = hi - lo >= 15;
-  const zones: Array<{ key: Verdict; label: string; short: string; width: number }> = [
-    { key: "real", label: "Real", short: "Real", width: lo },
-    {
-      key: "uncertain",
-      label: roomForMiddle ? "Uncertain" : "",
-      short: roomForMiddle ? "Unsure" : "",
-      width: Math.max(0, hi - lo),
-    },
-    { key: "fake", label: "AI Generated", short: "AI", width: Math.max(0, 100 - hi) },
-  ];
 
   return (
     <section className={`vc vc--${result.verdict}`} aria-labelledby="vc-title">
@@ -105,41 +88,16 @@ export function VerdictCard({ result }: VerdictCardProps) {
           </div>
         </dl>
 
-        <div className="vc__scale">
-          <div className="vc__scale-labels" aria-hidden="true">
-            {zones.map((z) => (
-              <span
-                key={z.key}
-                style={{ width: `${z.width}%` }}
-                className={z.key === result.verdict ? "is-active" : undefined}
-              >
-                <span className="vc__long">{z.label}</span>
-                <span className="vc__short">{z.short}</span>
-              </span>
-            ))}
-          </div>
+        <ConfidenceGauge
+          score={result.fakeScore}
+          verdict={result.verdict}
+          bands={result.bands}
+        />
 
-          <div
-            className="vc__track"
-            role="img"
-            aria-label={`Score ${result.fakeScore.toFixed(1)} of 100. Real at or below ${lo}, AI generated at or above ${hi}.`}
-          >
-            <div className="vc__zones">
-              {zones.map((z) => (
-                <span key={z.key} className={`vc__zone vc__zone--${z.key}`} style={{ width: `${z.width}%` }} />
-              ))}
-            </div>
-            <span className="vc__marker" style={{ left: `${clamp(result.fakeScore)}%` }} />
-          </div>
-
-          {/* Only the two thresholds are labelled. 0 and 100 are the ends of a
-              0-100 bar and add nothing, and with the bands 5 points apart they
-              would crowd the numbers that matter. */}
-          <div className="vc__ticks" aria-hidden="true">
-            <span style={{ left: `${lo}%` }}>{lo}</span>
-            <span style={{ left: `${hi}%` }}>{hi}</span>
-          </div>
-        </div>
+        {/* the dial already names the three zones; this carries the numbers */}
+        <p className="vc__bands">
+          Real <b>&le; {lo}</b> · AI generated <b>&ge; {hi}</b>
+        </p>
       </div>
     </section>
   );

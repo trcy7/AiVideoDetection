@@ -47,10 +47,8 @@ export function ResultsView({
       <div className="rview__main">
         <section className="rview__evidence glass-card" aria-labelledby="rview-evidence-title">
           <div className="rview__evidence-head">
-            <h2 id="rview-evidence-title" className="rview__h2">Frame evidence</h2>
-            <p className="rview__sub">
-              GradCAM heatmap for each sampled frame. Red marks flagged regions.
-            </p>
+            <h2 id="rview-evidence-title" className="rview__h2">GradCAM heatmap</h2>
+            <p className="rview__sub">Per-frame activation map. Red marks flagged regions.</p>
           </div>
           <HeatmapViewer frames={result.frames} videoUrl={videoUrl} thumbnail={thumbnail} />
         </section>
