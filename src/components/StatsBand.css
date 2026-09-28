@@ -1,59 +1,35 @@
+/* Counter strip in the hero's copy column, under the lede. */
+
 .stats-band {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--space-4);
-  max-width: min(var(--content-width), calc(100% - 48px));
-  margin: calc(var(--section-pad-y) * -0.35) auto var(--space-6);
-  padding: var(--space-5);
-  background: var(--glass-bg);
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
-  position: relative;
-  z-index: 2;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4) var(--space-5);
+  /* the hero column is align-items:flex-start, so stretch explicitly or the
+     grid collapses to its content and the rule above it stops short */
+  width: 100%;
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border);
 }
 
 .stats-band__item {
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: var(--space-1);
-  text-align: center;
-  padding-inline: var(--space-2);
-}
-
-.stats-band__item + .stats-band__item {
-  border-left: 1px solid var(--color-border);
+  min-width: 0;
 }
 
 .stats-band__value {
   font-family: var(--font-display);
-  font-size: var(--text-2xl);
+  font-size: clamp(1.25rem, 1.05rem + 0.9vw, 1.7rem);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
   color: var(--color-accent);
 }
 
-@media (max-width: 700px) {
+/* hero is stacked here, so the column is wide enough for a single row */
+@media (min-width: 640px) and (max-width: 1000px) {
   .stats-band {
-    grid-template-columns: repeat(2, 1fr);
-    row-gap: var(--space-5);
-  }
-  .stats-band__item:nth-child(3) {
-    border-left: none;
-  }
-}
-
-@media (max-width: 420px) {
-  .stats-band {
-    grid-template-columns: 1fr;
-  }
-  /* stacked: the column divider would read as a stray vertical line */
-  .stats-band__item + .stats-band__item {
-    border-left: none;
-    border-top: 1px solid var(--color-border);
-    padding-top: var(--space-4);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }

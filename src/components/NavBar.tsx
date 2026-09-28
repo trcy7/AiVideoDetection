@@ -23,14 +23,6 @@ export function NavBar() {
     <header className="navbar">
       <div className="navbar__inner container">
         <Link className="navbar__brand" to="/" onClick={() => setMenuOpen(false)}>
-          <span className="navbar__brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 24 24" className="navbar__brand-glyph">
-              <rect x="5.4" y="5.4" width="2.7" height="13.2" rx="1.35" />
-              <rect x="5.4" y="5.4" width="12.6" height="2.7" rx="1.35" />
-              <rect x="5.4" y="10.65" width="8.6" height="2.7" rx="1.35" />
-              <rect x="5.4" y="15.9" width="12.6" height="2.7" rx="1.35" />
-            </svg>
-          </span>
           <span className="navbar__brand-name">ECNet</span>
         </Link>
 
