@@ -4,15 +4,15 @@ import "./FAQ.css";
 const FAQS: Array<{ q: string; a: string }> = [
   {
     q: "What kinds of video can ECNet detect?",
-    a: "Version 1 targets fully AI-generated video — clips produced by generators like Sora, Pika, Kling, Runway, and open-source models. Face-swap deepfake detection is on the roadmap (v2). It is not designed to catch conventional edits like cuts, splices, or color grading.",
+    a: "Fully AI-generated video. The model was trained on 13 generators, including Sora 2, Veo 3.1, Kling 2.6, Wan, Seedance, LTX-2, Ovi and Emu 3.5. It does not detect face-swap deepfakes, and it does not flag conventional editing such as cuts, splices or colour grading.",
   },
   {
     q: "How accurate is the detection?",
-    a: "No detector is perfect, which is why every verdict ships with a confidence score, per-branch evidence, and an explainable heatmap. The output is evidence for review, not proof. This applies in particular within the Uncertain band, and to generators the model has not been trained on.",
+    a: "ECNet-7 scores 0.93 AUC and 84.9% balanced accuracy across 3,453 validation videos. Accuracy is lower on generators absent from training, since those leave artifacts the model has not seen. Scores near the thresholds are returned as Uncertain rather than forced to a verdict.",
   },
   {
     q: "What does the confidence score actually mean?",
-    a: "It reflects how decisive and consistent the evidence is across the sampled frames. A 95% 'AI Generated' means nearly every frame showed strong generation traces; a 55% verdict means the frames disagreed and a human should review the heatmap.",
+    a: "Confidence combines two measures: how far the score sits from the decision threshold, and how closely the analysed frames agree with each other. It is distinct from the score itself. A clip can score high with low confidence when only part of it carries artifacts.",
   },
   {
     q: "Is my video uploaded to a server?",
@@ -20,11 +20,15 @@ const FAQS: Array<{ q: string; a: string }> = [
   },
   {
     q: "Why does the heatmap matter if I already have a verdict?",
-    a: "It makes the decision auditable. The GradCAM overlay shows which regions drove the score: if it highlights a morphing background, sliding texture, or a watermark ghost, you can see the evidence yourself; if it's reacting to compression noise, you'll see that too and can discount the verdict.",
+    a: "The GradCAM overlay marks the regions that raised the score, making the verdict auditable rather than asserted. Regions are drawn only where generation artifacts were detected; a clip returned as Real shows none.",
+  },
+  {
+    q: "Which links are supported?",
+    a: "YouTube, TikTok and Facebook links to publicly accessible videos, up to 60 seconds. Instagram is not supported because its posts require an authenticated session. Links to images, audio or private videos are rejected.",
   },
   {
     q: "What video formats and sizes are supported?",
-    a: "MP4, MOV, WebM, MKV, and AVI files up to 500 MB. Very low-resolution or heavily re-compressed clips can still be analyzed, but detection confidence drops when the traces the model relies on have been smoothed away.",
+    a: "MP4, MOV, WebM, MKV and AVI, up to 500 MB and 60 seconds. Heavily compressed or very low-resolution clips are accepted, but confidence falls as compression removes the artifacts the model depends on.",
   },
 ];
 

@@ -59,10 +59,7 @@ export function Footer() {
       </div>
 
       <div className="container footer__bottom">
-        <span>
-          © {new Date().getFullYear()} ECNet. Detection results are
-          probabilistic — evidence for review, not proof.
-        </span>
+        <span>© {new Date().getFullYear()} ECNet</span>
       </div>
     </footer>
   );
