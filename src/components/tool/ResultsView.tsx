@@ -5,6 +5,7 @@ import { ConfidenceGauge } from "./ConfidenceGauge";
 import { VerdictCard } from "./VerdictCard";
 import { HistoryPanel } from "./HistoryPanel";
 import { HeatmapViewer } from "./HeatmapViewer";
+import { ScoreTimeline } from "./ScoreTimeline";
 import { FeedbackCard } from "./FeedbackCard";
 import "./ResultsView.css";
 
@@ -67,6 +68,20 @@ export function ResultsView({
           </div>
           <HeatmapViewer frames={result.frames} videoUrl={videoUrl} thumbnail={thumbnail} />
         </section>
+
+        {result.windows && result.windows.length > 1 && (
+          <section className="rview__timeline glass-card" aria-label="Score over time">
+            <div className="rview__heatmap-header">
+              <h3>Score over time</h3>
+              <p>Each point is one analysed window.</p>
+            </div>
+            <ScoreTimeline
+              windows={result.windows}
+              bands={result.bands}
+              fakeScore={result.fakeScore}
+            />
+          </section>
+        )}
       </div>
 
       <section className="rview__report glass-card" aria-label="Detection report">

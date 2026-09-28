@@ -1,0 +1,75 @@
+.stl {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.stl__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+/* verdict bands as ground: height alone tells you what a point means */
+.stl__zone {
+  opacity: 0.1;
+}
+.stl__zone--real {
+  fill: var(--color-real-mark);
+}
+.stl__zone--unc {
+  fill: var(--color-uncertain-mark);
+}
+.stl__zone--fake {
+  fill: var(--color-fake-mark);
+}
+
+.stl__grid {
+  stroke: var(--color-border);
+  stroke-width: 1;
+}
+
+.stl__tick {
+  fill: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+
+.stl__area {
+  fill: var(--color-accent);
+  opacity: 0.12;
+}
+
+.stl__line {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.stl__dot {
+  fill: var(--color-surface);
+  stroke: var(--color-accent);
+  stroke-width: 1.6;
+}
+
+.stl__mean {
+  stroke: var(--color-text-muted);
+  stroke-width: 1.2;
+  stroke-dasharray: 5 4;
+}
+
+.stl__meanlabel {
+  fill: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+}
+
+.stl__cap {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  line-height: 1.55;
+}

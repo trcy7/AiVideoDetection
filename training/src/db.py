@@ -7,6 +7,7 @@ Every call is best-effort: a storage failure must never break an analysis.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import threading
 import uuid
@@ -37,7 +38,8 @@ CREATE TABLE IF NOT EXISTS analyses (
     model_version  TEXT,
     real_below     REAL,
     fake_above     REAL,
-    processing_ms  INTEGER
+    processing_ms  INTEGER,
+    window_scores  TEXT          -- JSON [{time, score}]; the distribution behind fake_score
 );
 CREATE TABLE IF NOT EXISTS feedback (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,6 +82,12 @@ def init(path: str | Path) -> None:
         p.parent.mkdir(parents=True, exist_ok=True)
         con = sqlite3.connect(p, timeout=5.0)
         con.executescript(_SCHEMA)
+        # CREATE TABLE IF NOT EXISTS never alters an existing table, so a db
+        # written before a column existed keeps its old shape -- migrate it.
+        have = {r[1] for r in con.execute("PRAGMA table_info(analyses)")}
+        for col, decl in (("window_scores", "TEXT"),):
+            if col not in have:
+                con.execute(f"ALTER TABLE analyses ADD COLUMN {col} {decl}")
         con.execute("PRAGMA journal_mode=WAL")     # concurrent reads while writing
         con.commit()
         con.close()
@@ -108,12 +116,13 @@ def log_analysis(result: dict, file_hash: str, processing_ms: int) -> Optional[s
                 "INSERT INTO analyses (id, created_at, file_name, file_hash, verdict,"
                 " fake_score, confidence, spatial_score, temporal_score, frequency_score,"
                 " motion_score, frames_analyzed, model_version, real_below, fake_above,"
-                " processing_ms) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                " processing_ms, window_scores) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (row_id, _now(), result.get("fileName"), file_hash, result.get("verdict"),
                  result.get("fakeScore"), result.get("confidence"), bs.get("spatial"),
                  bs.get("opticalFlow"), bs.get("frequency"), bs.get("motion"),
                  len(result.get("frames") or []), result.get("modelVersion"),
-                 bands.get("realBelow"), bands.get("fakeAbove"), processing_ms),
+                 bands.get("realBelow"), bands.get("fakeAbove"), processing_ms,
+                 json.dumps(result.get("windows") or []) or None),
             )
         return row_id
     except Exception as e:  # noqa: BLE001

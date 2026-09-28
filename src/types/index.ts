@@ -38,6 +38,16 @@ export interface HeatmapFrame {
   image?: string;
 }
 
+/** One scored window of the clip. fakeScore is the mean of these, so the
+ *  distribution says things the mean cannot: whether the model was uniformly
+ *  unsure, or confident in opposite directions at different moments. */
+export interface WindowScore {
+  /** Start time of the window in the source video, seconds. */
+  time: number;
+  /** 0-100, same scale as fakeScore. */
+  score: number;
+}
+
 /** A rendered still for the PDF report: a JPEG data-URL (GradCAM baked in) with
  *  a short caption. */
 export interface ReportFrame {
@@ -69,6 +79,8 @@ export interface AnalysisResult {
   branchScores: BranchScores;
   indicators: Indicator[];
   frames: HeatmapFrame[];
+  /** Per-window scores behind fakeScore. Absent on older/mock results. */
+  windows?: WindowScore[];
   analyzedAt: string;
   /** Wall-clock analysis time in ms (measured from the flow, not mocked). */
   processingMs: number;

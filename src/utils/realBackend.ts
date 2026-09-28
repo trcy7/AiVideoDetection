@@ -1,4 +1,4 @@
-import type { BranchScores, HeatmapFrame, Verdict } from "../types";
+import type { BranchScores, HeatmapFrame, Verdict, WindowScore } from "../types";
 
 /** Set VITE_USE_REAL_BACKEND=true in .env.local to call a real trained
  *  model (via training/src/server.py) instead of the built-in mock. */
@@ -37,6 +37,8 @@ export interface BackendAnalysis {
   bands?: { realBelow: number; fakeAbove: number };
   branchScores: BranchScores;
   frames: HeatmapFrame[];
+  /** Per-window scores behind fakeScore; absent on servers predating them. */
+  windows?: WindowScore[];
   modelVersion: string;
   /** Audit-trail row id; null when the server runs without storage. */
   analysisId?: string | null;

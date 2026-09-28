@@ -262,6 +262,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
             branchScores: backend.branchScores,
             indicators: [],
             frames: backend.frames,
+            windows: backend.windows,
             analyzedAt: new Date().toISOString(),
             processingMs,
             modelVersion: backend.modelVersion,

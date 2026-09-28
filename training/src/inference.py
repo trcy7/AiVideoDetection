@@ -206,6 +206,7 @@ def _predict_hybrid(video_path: str | Path, model, cfg: dict, device: torch.devi
         box = common_content_box([rgb for win in windows for _, _, rgb in win])
 
     fused_probs: list[float] = []
+    window_times: list[float] = []   # start time of each window, for the timeline
     spatial_probs: list[float] = []
     temporal_probs: list[float] = []
     frequency_probs: list[float] = []
@@ -266,6 +267,7 @@ def _predict_hybrid(video_path: str | Path, model, cfg: dict, device: torch.devi
             frame_entries[int(src_idx)] = entry
         win_tensor = torch.stack(tensors).unsqueeze(0)   # (1, T, C, H, W)
         fused_p, spatial_p, temporal_p, freq_p, motion_p = _window_probs(model, win_tensor, use_tta)
+        window_times.append(round(float(window[0][1]), 2))
         fused_probs.append(fused_p)
         spatial_probs.append(spatial_p)
         temporal_probs.append(temporal_p)
@@ -321,6 +323,12 @@ def _predict_hybrid(video_path: str | Path, model, cfg: dict, device: torch.devi
             "motion": round(float(np.mean(motion_probs)) * 100.0, 1) if motion_probs else None,
         },
         "frames": frame_entries_out,
+        # Per-window scores, not just their mean. fakeScore is mean(windows), so
+        # a clip whose windows are all ~58 and one that alternates 5 and 99 look
+        # identical from the score alone -- they are different failures needing
+        # different fixes. Cheap to carry (~1 KB) and computed either way.
+        "windows": [{"time": t, "score": round(p * 100.0, 1)}
+                    for t, p in zip(window_times, fused_probs)],
     }
     validate_result(result, float(icfg["verdict_real_below"]), float(icfg["verdict_fake_above"]))
     return result
@@ -436,6 +444,9 @@ def validate_result(result: dict, real_below: float = 35.0, fake_above: float = 
     for slot in ("frequency", "opticalFlow", "motion"):
         v = result["branchScores"].get(slot)
         assert v is None or 0.0 <= v <= 100.0, f"branchScores.{slot} out of range: {v}"
+    for w in result.get("windows", []):
+        assert 0.0 <= w["score"] <= 100.0, f"window score out of range: {w['score']}"
+        assert w["time"] >= 0
     for entry in result["frames"]:
         assert entry["index"] >= 0 and entry["time"] >= 0
         for box in entry["boxes"]:
