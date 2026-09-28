@@ -1,0 +1,133 @@
+.dcard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: clamp(var(--space-4), 2.2vw, var(--space-5));
+}
+
+.dcard__intro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.dcard__heading {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+.dcard__sub {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.dcard__list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dcard__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.dcard__item + .dcard__item {
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border);
+}
+
+.dcard__item-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.dcard__name {
+  display: block;
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.dcard__model {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.dcard__score {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.dcard__score small {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.dcard__bar {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-surface-sunken);
+}
+
+.dcard__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  transition: width var(--transition-slow);
+}
+
+.dcard__fill--real { background: var(--color-real-mark); }
+.dcard__fill--fake { background: var(--color-fake-mark); }
+.dcard__fill--uncertain { background: var(--color-uncertain-mark); }
+
+.dcard__threshold {
+  position: absolute;
+  top: -4px;
+  width: 2px;
+  height: 16px;
+  margin-left: -1px;
+  background: var(--color-text);
+}
+
+.dcard__desc {
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.dcard__note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.dcard__swatch {
+  flex: none;
+  width: 2px;
+  height: 14px;
+  background: var(--color-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dcard__fill {
+    transition: none;
+  }
+}

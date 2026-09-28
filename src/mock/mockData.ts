@@ -38,13 +38,13 @@ function confidenceFor(verdict: Verdict): number {
 
 function branchScoresFor(fakeScore: number): BranchScores {
   const jitter = () => (Math.random() - 0.5) * 24;
-  // Mirrors the REAL v1 backend contract: only the spatial branch runs;
-  // frequency and optical flow report null until v2. Faking numbers here
-  // would train users to trust scores the model never produced.
+  // Mirrors the shipped contract: the hybrid runs spatial + temporal, and
+  // frequency stays null because ECNet-7 was built with frequency_branch off.
+  // opticalFlow is the temporal branch's slot.
   return {
     spatial: clamp(fakeScore + jitter(), 2, 98),
     frequency: null,
-    opticalFlow: null,
+    opticalFlow: clamp(fakeScore + jitter(), 2, 98),
   };
 }
 

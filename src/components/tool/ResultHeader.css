@@ -1,131 +1,118 @@
-.rheader {
+.rhead {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-5);
-  padding: var(--space-5);
   flex-wrap: wrap;
-  position: relative;
-  overflow: hidden;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4) var(--space-6);
 }
 
-/* thin brand gradient along the top edge */
-.rheader::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, var(--color-accent), var(--color-cyan), var(--color-purple));
-  opacity: 0.85;
-}
-
-.rheader__text {
+.rhead__text {
+  flex: 1 1 380px;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  min-width: 0;
 }
 
-.rheader__title {
+.rhead__eyebrow {
+  color: var(--color-accent);
+}
+
+.rhead__title {
+  font-family: var(--font-display);
+  font-size: clamp(1.35rem, 1.1rem + 1.4vw, 2rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  /* a filename is one long token; clamp it rather than let it wrap to four lines */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.rhead__meta {
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  font-size: var(--text-xl);
-  letter-spacing: -0.01em;
-}
-
-.rheader__pulse {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--color-accent);
-  box-shadow: 0 0 10px var(--color-accent);
-  animation: rheader-pulse 2s ease-in-out infinite;
-  flex-shrink: 0;
-}
-
-@keyframes rheader-pulse {
-  0%,
-  100% {
-    transform: scale(0.85);
-    opacity: 0.75;
-  }
-  50% {
-    transform: scale(1.1);
-    opacity: 1;
-  }
-}
-
-.rheader__subtitle {
+  flex-wrap: wrap;
+  gap: 2px var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
   font-size: var(--text-sm);
   color: var(--color-text-muted);
 }
 
-.rheader__meta {
-  margin: var(--space-2) 0 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-5);
+.rhead__meta strong {
+  font-weight: 500;
+  color: var(--color-text);
 }
 
-.rheader__meta-item dd {
-  margin: 2px 0 0;
+.rhead__mono {
   font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
 }
 
-.rheader__actions {
+.rhead__actions {
   display: flex;
-  gap: var(--space-3);
   flex-wrap: wrap;
+  gap: var(--space-3);
 }
 
-.rheader__btn {
+/* ---- report action buttons ---- */
+
+.rbtn {
   display: inline-flex;
   align-items: center;
-  min-height: 42px;
-  padding: var(--space-2) var(--space-5);
-  border-radius: var(--radius-md);
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 var(--space-4);
   border: 1px solid var(--color-border-strong);
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: var(--text-sm);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
   color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 500;
   text-decoration: none;
-  background: transparent;
-  transition: border-color 0.15s ease, color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--transition), border-color var(--transition);
 }
 
-.rheader__btn:hover {
+.rbtn:hover {
+  background: var(--color-surface-raised);
   border-color: var(--color-accent);
   color: var(--color-accent);
-  transform: translateY(-1px);
 }
 
-.rheader__btn--primary {
+.rbtn--primary,
+.rbtn--primary:hover {
+  border-color: transparent;
   background: var(--color-accent);
-  border-color: var(--color-accent);
   color: var(--color-accent-contrast);
-  box-shadow: 0 0 16px var(--glow-accent);
+  font-weight: 600;
 }
 
-.rheader__btn--primary:hover {
-  color: var(--color-accent-contrast);
-  box-shadow: 0 4px 22px var(--glow-accent);
+.rbtn--primary {
+  box-shadow: 0 0 18px var(--glow-accent);
 }
 
-@media (max-width: 560px) {
-  .rheader {
-    padding: var(--space-4);
+@media (max-width: 640px) {
+  .rhead__actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
   }
-  .rheader__title {
-    font-size: var(--text-lg);
+  .rbtn {
+    width: 100%;
+    padding: 0 var(--space-3);
   }
-  .rheader__meta {
-    gap: var(--space-2) var(--space-4);
+  /* the thing you most likely want next goes first and full width */
+  .rbtn--primary {
+    grid-column: 1 / -1;
+    order: -1;
   }
 }

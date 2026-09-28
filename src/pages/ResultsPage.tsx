@@ -28,7 +28,6 @@ export function ResultsPage() {
             </svg>
             New analysis
           </Link>
-          <span className="hud-label rpage__crumb">Analysis report</span>
         </div>
 
         {inFlight && (a.file || a.sourceUrl) && (
@@ -112,19 +111,11 @@ export function ResultsPage() {
               onSelectHistory={a.selectHistory}
               onRemoveHistory={a.removeHistory}
               onClearHistory={a.clearHistory}
+              onAnalyzeAnother={() => {
+                a.reset();
+                navigate("/#analyze");
+              }}
             />
-            <div className="rpage__actions">
-              <button
-                type="button"
-                className="tool__ghost"
-                onClick={() => {
-                  a.reset();
-                  navigate("/#analyze");
-                }}
-              >
-                Analyze another video
-              </button>
-            </div>
           </>
         )}
 

@@ -1,8 +1,8 @@
 import type { AnalysisResult, HistoryItem, VideoMetadata } from "../../types";
 import { ResultHeader } from "./ResultHeader";
 import { VideoPreview } from "./VideoPreview";
-import { ConfidenceGauge } from "./ConfidenceGauge";
 import { VerdictCard } from "./VerdictCard";
+import { DetectorCard } from "./DetectorCard";
 import { HistoryPanel } from "./HistoryPanel";
 import { HeatmapViewer } from "./HeatmapViewer";
 import "./ResultsView.css";
@@ -18,11 +18,13 @@ interface ResultsViewProps {
   onSelectHistory: (item: HistoryItem) => void;
   onRemoveHistory: (id: string) => void;
   onClearHistory: () => void;
+  onAnalyzeAnother: () => void;
 }
 
-/** Results layout: header on top; video preview + verdict/gauge in the left
- *  column, GradCAM wide on the right; analysis history FULL-WIDTH below the
- *  results (it's secondary to the verdict evidence). Mobile: single column. */
+/** Report layout: head and verdict run full width, then frame evidence on the
+ *  left with the branch breakdown and video details stacked beside it, and
+ *  history below. Tablet drops to one column with the two side cards paired;
+ *  phone stacks everything. */
 export function ResultsView({
   result,
   videoUrl,
@@ -34,63 +36,37 @@ export function ResultsView({
   onSelectHistory,
   onRemoveHistory,
   onClearHistory,
+  onAnalyzeAnother,
 }: ResultsViewProps) {
   return (
     <div className="rview" role="region" aria-label="Analysis results">
-      <div className="rview__header">
-        <ResultHeader result={result} />
-      </div>
+      <ResultHeader result={result} onAnalyzeAnother={onAnalyzeAnother} />
 
-      <div className="rview__left">
-        <section className="rview__verdict glass-card" aria-label="Detection verdict">
-          <ConfidenceGauge score={result.fakeScore} verdict={result.verdict} bands={result.bands} />
-          <VerdictCard result={result} />
-        </section>
-
-        <VideoPreview
-          fileName={result.fileName}
-          fileSize={fileSize}
-          metadata={metadata}
-          verdict={result.verdict}
-          videoUrl={videoUrl}
-          thumbnail={thumbnail}
-        />
-      </div>
+      <VerdictCard result={result} />
 
       <div className="rview__main">
-        <section className="rview__heatmap glass-card" aria-label="GradCAM heatmap">
-          <div className="rview__heatmap-header">
-            <h3>GradCAM heatmap</h3>
-            <p>Red marks flagged regions.</p>
+        <section className="rview__evidence glass-card" aria-labelledby="rview-evidence-title">
+          <div className="rview__evidence-head">
+            <h2 id="rview-evidence-title" className="rview__h2">Frame evidence</h2>
+            <p className="rview__sub">
+              GradCAM heatmap for each sampled frame. Red marks flagged regions.
+            </p>
           </div>
           <HeatmapViewer frames={result.frames} videoUrl={videoUrl} thumbnail={thumbnail} />
         </section>
+
+        <div className="rview__side">
+          <DetectorCard result={result} />
+          <VideoPreview
+            fileName={result.fileName}
+            fileSize={fileSize}
+            metadata={metadata}
+            verdict={result.verdict}
+            videoUrl={videoUrl}
+            thumbnail={thumbnail}
+          />
+        </div>
       </div>
-
-      <section className="rview__report glass-card" aria-label="Detection report">
-        <div className="rview__report-text">
-          <h3>Detection report</h3>
-          <p>Full results as a PDF.</p>
-        </div>
-        <div className="rview__report-actions">
-          <a
-            className="rview__report-btn rview__report-btn--primary"
-            href={result.reportUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            View report
-          </a>
-          <a
-            className="rview__report-btn"
-            href={result.reportUrl}
-            download={`${result.fileName.replace(/\.[^/.]+$/, "")}-ecnet-report.pdf`}
-          >
-            Download PDF
-          </a>
-        </div>
-      </section>
-
 
       <div className="rview__history">
         <HistoryPanel

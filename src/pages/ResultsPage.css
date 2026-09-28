@@ -45,10 +45,6 @@
   color: var(--color-accent);
 }
 
-.rpage__crumb {
-  color: var(--color-accent);
-}
-
 /* ---- scanning state ---- */
 
 .rpage__scanning {
@@ -211,14 +207,6 @@
   overflow-wrap: anywhere;
 }
 
-/* ---- results actions ---- */
-
-.rpage__actions {
-  display: flex;
-  justify-content: center;
-  margin-top: var(--space-5);
-}
-
 /* ---- empty state ---- */
 
 .rpage__empty {
@@ -290,8 +278,7 @@
   .rpage__title {
     font-size: var(--text-xl);
   }
-  .rpage__error-actions,
-  .rpage__actions {
+  .rpage__error-actions {
     width: 100%;
   }
   .rpage__error-actions .tool__cta,
