@@ -133,7 +133,7 @@ export function ResultsPage() {
           </>
         )}
 
-        {!inFlight && !a.display && a.analysisError && a.file && (
+        {!inFlight && !a.display && a.analysisError && (a.file || a.sourceUrl) && (
           <div className="rpage__empty">
             <div className="rpage__empty-card rpage__empty-card--error glass-card">
               <span className="rpage__empty-icon rpage__empty-icon--error" aria-hidden="true">
@@ -156,14 +156,14 @@ export function ResultsPage() {
                     navigate("/#analyze");
                   }}
                 >
-                  Choose a different file
+                  {a.file ? "Choose a different file" : "Use a different link"}
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {!inFlight && !a.display && !(a.analysisError && a.file) && (
+        {!inFlight && !a.display && !(a.analysisError && (a.file || a.sourceUrl)) && (
           <div className="rpage__empty">
             <div className="rpage__empty-card glass-card">
               <span className="rpage__empty-icon" aria-hidden="true">

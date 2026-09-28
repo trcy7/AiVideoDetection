@@ -29,6 +29,7 @@ import {
   type LinkMeta,
 } from "../utils/realBackend";
 import { putVideo, getVideo, deleteVideo, clearVideos, pruneVideos } from "../utils/videoStore";
+import { MAX_DURATION_SECONDS } from "../utils/validateVideoFile";
 
 /**
  * The detection flow as a small state machine, lifted to app scope so it
@@ -180,6 +181,20 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     void resolveUrlMeta(url)
       .then((m) => {
         setSourceMeta(m);
+        // The same limit uploads are held to. The server rejects it anyway,
+        // but only after the analysis has been queued -- catching it here
+        // saves the user the wait and the backend the work.
+        if (m?.durationSec && m.durationSec > MAX_DURATION_SECONDS) {
+          setAnalysisError(
+            `That video is ${Math.round(m.durationSec)}s. Only clips up to ` +
+              `${MAX_DURATION_SECONDS}s are analysed.`,
+          );
+          backendRequestStarted.current = true;   // stop the pending request
+          setProgress(0);
+          setPreprocessStep(0);
+          setPhase("ready");
+          return null;
+        }
         if (m) {
           setMetadata({
             duration: m.durationSec,

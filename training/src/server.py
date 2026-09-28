@@ -285,6 +285,11 @@ def _download_clip(url: str) -> tuple[Path, Path, str, bool]:
 
     _reject_internal_host(url)
     tmpdir = Path(tempfile.mkdtemp(prefix="ecnet_url_"))
+    # Uploads are rejected above a minute, so links must be too. Trimming them
+    # instead would mean a 10-minute video silently judged on its first minute,
+    # and the same file refused outright if dragged in. match_filter rejects
+    # during extraction, so an over-length clip is never downloaded.
+    over_length: list[str] = []
     opts = {
         # Video-only by preference: the model never looks at audio, so this
         # avoids a merge step and halves the download. YouTube serves DASH
@@ -300,6 +305,11 @@ def _download_clip(url: str) -> tuple[Path, Path, str, bool]:
         "noprogress": True,
         "max_filesize": MAX_URL_BYTES,
         "socket_timeout": 30,
+        "match_filter": yt_dlp.utils.match_filter_func(
+            f"duration <= {MAX_URL_SECONDS}"),
+        # yt-dlp reports a filtered-out video through this hook, not an
+        # exception, so capture the reason rather than inferring it from silence
+        "progress_hooks": [],
     }
     # Section download is an ffmpeg feature. Without it we still cap bytes, but
     # the whole clip gets scored rather than just the first minute -- say so in
@@ -314,8 +324,34 @@ def _download_clip(url: str) -> tuple[Path, Path, str, bool]:
             info = ydl.extract_info(url, download=True)
     except Exception as e:
         shutil.rmtree(tmpdir, ignore_errors=True)
+        msg = str(e)
+        if "does not pass filter" in msg or "duration" in msg.lower():
+            raise HTTPException(
+                422, f"That video is longer than {MAX_URL_SECONDS} seconds. "
+                     f"Only clips up to {MAX_URL_SECONDS // 60} minute are analysed.")
         # yt-dlp messages name the real cause (private, geo-blocked, login wall)
-        raise HTTPException(422, f"Could not fetch that link: {str(e)[:200]}")
+        raise HTTPException(422, f"Could not fetch that link: {msg[:200]}")
+
+    info = info or {}
+
+    # Check duration FIRST. match_filter stops the download but still returns
+    # info, so any later check -- "no files", "no video stream" -- fires on an
+    # over-length clip and reports the wrong reason.
+    dur = info.get("duration")
+    if isinstance(dur, (int, float)) and dur > MAX_URL_SECONDS:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+        raise HTTPException(
+            422, f"That video is {int(dur)}s. Only clips up to "
+                 f"{MAX_URL_SECONDS}s are analysed, the same limit as uploads.")
+
+    # yt-dlp happily resolves image posts and audio-only media; the model needs
+    # frames. Checked against the formats list, which survives a filtered run.
+    fmts = info.get("formats") or []
+    has_video = (info.get("vcodec") not in (None, "none")
+                 or any(f.get("vcodec") not in (None, "none") for f in fmts))
+    if fmts and not has_video:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+        raise HTTPException(422, "That link has no video stream.")
 
     files = [f for f in tmpdir.iterdir() if f.is_file() and f.stat().st_size > 10_000]
     if not files:
