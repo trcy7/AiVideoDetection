@@ -44,19 +44,19 @@ export function validateVideoFile(file: File): ValidationResult {
 
   if (!typeOk) {
     if (file.type.startsWith("image/") || IMAGE_EXTENSIONS.includes(extension)) {
-      return { valid: false, error: "That's an image. This tool analyses video — pick a clip instead." };
+      return { valid: false, error: "Image files are not supported. Select a video file." };
     }
     if (file.type.startsWith("audio/") || AUDIO_EXTENSIONS.includes(extension)) {
-      return { valid: false, error: "That's an audio file. This tool needs video frames to analyse." };
+      return { valid: false, error: "Audio files are not supported. Select a video file." };
     }
     return {
       valid: false,
-      error: `Unsupported file type "${extension || file.type || "unknown"}". Accepted formats: ${ACCEPTED_EXTENSIONS.join(", ")}.`,
+      error: `Unsupported format: ${extension || file.type || "unknown"}. Supported formats: ${ACCEPTED_EXTENSIONS.join(", ")}.`,
     };
   }
 
   if (file.size === 0) {
-    return { valid: false, error: "This file is empty." };
+    return { valid: false, error: "File is empty." };
   }
 
   if (file.size > MAX_FILE_SIZE_BYTES) {
@@ -64,7 +64,7 @@ export function validateVideoFile(file: File): ValidationResult {
     const fileMb = (file.size / (1024 * 1024)).toFixed(1);
     return {
       valid: false,
-      error: `File is too large (${fileMb} MB). Maximum allowed size is ${maxMb} MB.`,
+      error: `File exceeds the ${maxMb} MB limit (${fileMb} MB).`,
     };
   }
 
@@ -87,7 +87,7 @@ export function checkVideoDuration(file: File): Promise<ValidationResult> {
       if (Number.isFinite(d) && d > MAX_DURATION_SECONDS) {
         done({
           valid: false,
-          error: `That video is ${Math.round(d)}s. Maximum length is ${MAX_DURATION_SECONDS}s (1 minute).`,
+          error: `Video exceeds the ${MAX_DURATION_SECONDS}-second limit (${Math.round(d)}s).`,
         });
       } else {
         done({ valid: true });

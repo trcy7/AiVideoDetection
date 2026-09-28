@@ -13,8 +13,8 @@ export const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL ?? "http://localhos
  *  backend when it is really a misconfigured env var, so name it precisely. */
 const BACKEND_URL_ERROR =
   USE_REAL_BACKEND && !/^https?:\/\//i.test(BACKEND_URL)
-    ? `VITE_BACKEND_URL must be an absolute URL starting with https:// ` +
-      `(got "${BACKEND_URL}"). Set it in Vercel and redeploy.`
+    ? `Configuration error: VITE_BACKEND_URL must be an absolute URL ` +
+      `beginning with https:// (received "${BACKEND_URL}").`
     : null;
 
 /** ngrok's free tier answers anything browser-shaped with an HTML interstitial
@@ -58,7 +58,7 @@ export async function sendFeedback(
     headers: { ...BACKEND_HEADERS, "Content-Type": "application/json" },
     body: JSON.stringify({ analysisId, actualLabel, note }),
   });
-  if (!res.ok) throw new Error(`Feedback failed (${res.status})`);
+  if (!res.ok) throw new Error(`Feedback could not be submitted (${res.status}).`);
 }
 
 /** Older/stale servers appended the architecture to the label
@@ -131,8 +131,8 @@ export async function analyzeUrlWithBackend(url: string): Promise<BackendAnalysi
     });
   } catch {
     throw new Error(
-      `Can't reach the inference server at ${BACKEND_URL}. ` +
-        `The backend session may have ended -- restart it and try again.`,
+      `Inference server unreachable at ${BACKEND_URL}. ` +
+        `The backend may be offline.`,
     );
   }
   if (!res.ok) {
@@ -166,8 +166,8 @@ export async function analyzeWithBackend(file: File): Promise<BackendAnalysis> {
     });
   } catch {
     throw new Error(
-      `Can't reach the inference server at ${BACKEND_URL}. ` +
-        `The backend session may have ended -- restart it and try again.`,
+      `Inference server unreachable at ${BACKEND_URL}. ` +
+        `The backend may be offline.`,
     );
   }
 
@@ -184,14 +184,13 @@ export async function analyzeWithBackend(file: File): Promise<BackendAnalysis> {
       // usually alive and still working -- it is the analysis that overran,
       // which is what a CPU-only session looks like from out here.
       detail =
-        "the analysis took longer than the tunnel allows (5 min). " +
-        "The backend may be running on CPU instead of GPU.";
+        "analysis exceeded the 5-minute request limit.";
     }
     if (res.status === 405) {
       // Static hosts reject POST; the request never reached the backend.
       detail =
-        `the request reached ${BACKEND_URL} but that host refuses POST. ` +
-        `This is usually VITE_BACKEND_URL pointing at the frontend instead of the API.`;
+        `the request reached ${BACKEND_URL}, which does not accept POST. ` +
+        `VITE_BACKEND_URL may be pointing at the frontend rather than the API.`;
     }
     throw new Error(`Analysis failed (${res.status}): ${detail}`);
   }

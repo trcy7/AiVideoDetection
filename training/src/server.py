@@ -238,7 +238,7 @@ def _analyze_path(path: Path, file_hash: str) -> dict:
     """Score one local file. Shared by /analyze and /analyze-url."""
     predictor: Optional[Predictor] = _state["predictor"]
     if predictor is None:
-        raise HTTPException(500, "Server started without --checkpoint")
+        raise HTTPException(500, "No model loaded. The server was started without --checkpoint.")
 
     analyze_path = _normalize_upload(path)       # HDR -> SDR when ffmpeg is present
     started = time.perf_counter()
@@ -246,7 +246,7 @@ def _analyze_path(path: Path, file_hash: str) -> dict:
         with _infer_lock:
             result = predictor.predict(analyze_path)  # resident; no per-request reload
     except ValueError as e:
-        raise HTTPException(422, f"Could not analyze video: {e}")
+        raise HTTPException(422, f"Video could not be decoded: {e}")
     finally:
         if analyze_path != path:
             analyze_path.unlink(missing_ok=True)
@@ -267,9 +267,9 @@ _AUDIO_EXT = (".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus")
 def _reject_non_video_url(url: str) -> None:
     path = urlparse(url).path.lower()
     if path.endswith(_IMAGE_EXT):
-        raise HTTPException(422, "That link is an image. This tool analyses video.")
+        raise HTTPException(422, "Image links are not supported. Provide a video link.")
     if path.endswith(_AUDIO_EXT):
-        raise HTTPException(422, "That link is audio. This tool needs video frames.")
+        raise HTTPException(422, "Audio links are not supported. Provide a video link.")
 
 
 def _reject_internal_host(url: str) -> None:
@@ -278,15 +278,15 @@ def _reject_internal_host(url: str) -> None:
     host's own metadata and admin endpoints."""
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
-        raise HTTPException(422, "Only http(s) links are supported")
+        raise HTTPException(422, "Only http and https links are supported.")
     try:
         infos = socket.getaddrinfo(parsed.hostname, None)
     except OSError:
-        raise HTTPException(422, f"Could not resolve {parsed.hostname}")
+        raise HTTPException(422, f"Host could not be resolved: {parsed.hostname}")
     for info in infos:
         ip = ipaddress.ip_address(info[4][0])
         if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
-            raise HTTPException(422, "That host is not publicly routable")
+            raise HTTPException(422, "Host is not publicly routable.")
 
 
 def _download_clip(url: str) -> tuple[Path, Path, str, bool]:
@@ -295,7 +295,7 @@ def _download_clip(url: str) -> tuple[Path, Path, str, bool]:
     try:
         import yt_dlp
     except ImportError:
-        raise HTTPException(503, "Link analysis is unavailable (yt-dlp not installed)")
+        raise HTTPException(503, "Link analysis is unavailable: yt-dlp is not installed.")
 
     _reject_non_video_url(url)
     _reject_internal_host(url)
@@ -342,10 +342,9 @@ def _download_clip(url: str) -> tuple[Path, Path, str, bool]:
         msg = str(e)
         if "does not pass filter" in msg or "duration" in msg.lower():
             raise HTTPException(
-                422, f"That video is longer than {MAX_URL_SECONDS} seconds. "
-                     f"Only clips up to {MAX_URL_SECONDS // 60} minute are analysed.")
+                422, f"Video exceeds the {MAX_URL_SECONDS}-second limit.")
         # yt-dlp messages name the real cause (private, geo-blocked, login wall)
-        raise HTTPException(422, f"Could not fetch that link: {msg[:200]}")
+        raise HTTPException(422, f"Unable to fetch link: {msg[:200]}")
 
     info = info or {}
 
@@ -356,8 +355,7 @@ def _download_clip(url: str) -> tuple[Path, Path, str, bool]:
     if isinstance(dur, (int, float)) and dur > MAX_URL_SECONDS:
         shutil.rmtree(tmpdir, ignore_errors=True)
         raise HTTPException(
-            422, f"That video is {int(dur)}s. Only clips up to "
-                 f"{MAX_URL_SECONDS}s are analysed, the same limit as uploads.")
+            422, f"Video exceeds the {MAX_URL_SECONDS}-second limit ({int(dur)}s).")
 
     # yt-dlp happily resolves image posts and audio-only media; the model needs
     # frames. Checked against the formats list, which survives a filtered run.
@@ -366,12 +364,12 @@ def _download_clip(url: str) -> tuple[Path, Path, str, bool]:
                  or any(f.get("vcodec") not in (None, "none") for f in fmts))
     if fmts and not has_video:
         shutil.rmtree(tmpdir, ignore_errors=True)
-        raise HTTPException(422, "That link has no video stream.")
+        raise HTTPException(422, "No video stream found at this link.")
 
     files = [f for f in tmpdir.iterdir() if f.is_file() and f.stat().st_size > 10_000]
     if not files:
         shutil.rmtree(tmpdir, ignore_errors=True)
-        raise HTTPException(422, "That link produced no downloadable video")
+        raise HTTPException(422, "No downloadable video found at this link.")
     title = (info or {}).get("title") or "link"
     return tmpdir, max(files, key=lambda f: f.stat().st_size), title, trimmed
 
@@ -396,13 +394,13 @@ def resolve_url(body: AnalyzeUrlIn) -> dict:
     try:
         import yt_dlp
     except ImportError:
-        raise HTTPException(503, "Link analysis is unavailable (yt-dlp not installed)")
+        raise HTTPException(503, "Link analysis is unavailable: yt-dlp is not installed.")
     try:
         with _fetch_lock, yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True,
                                             "noplaylist": True, "socket_timeout": 20}) as ydl:
             info = ydl.extract_info(url, download=False) or {}
     except Exception as e:
-        raise HTTPException(422, f"Could not read that link: {str(e)[:200]}")
+        raise HTTPException(422, f"Unable to read link: {str(e)[:200]}")
 
     def num(*keys):
         for k in keys:
@@ -554,11 +552,11 @@ class FeedbackIn(BaseModel):
 def feedback(body: FeedbackIn) -> dict:
     """Ground truth for a past analysis -- builds a real-world labeled set."""
     if not db.enabled():
-        raise HTTPException(503, "Feedback storage is disabled on this server")
+        raise HTTPException(503, "Feedback storage is disabled on this server.")
     if body.actualLabel not in db.LABELS:
         raise HTTPException(422, f"actualLabel must be one of {db.LABELS}")
     if not db.save_feedback(body.analysisId, body.actualLabel, body.note):
-        raise HTTPException(404, "Unknown analysisId")
+        raise HTTPException(404, "Unknown analysisId.")
     return {"status": "ok"}
 
 
