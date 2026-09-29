@@ -221,11 +221,14 @@ def serve(
           f"\n  Audit trail: {db_path} (lost when the session ends)"
           f"\n{'=' * 62}\n  Leave this cell running. Interrupt it to stop.\n")
 
+    # Timestamped, so if Kaggle reclaims the session the last line says when.
+    # Elapsed hours alone cannot distinguish "stopped" from "still printing".
     started = time.time()
     try:
         while True:
-            time.sleep(600)
-            print(f"  alive {(time.time() - started) / 3600:.1f}h -- {url}", flush=True)
+            time.sleep(300)
+            print(f"  [{time.strftime('%H:%M:%S')}] alive "
+                  f"{(time.time() - started) / 60:.0f}m -- {url}", flush=True)
     except KeyboardInterrupt:
         print("shutting down")
         from pyngrok import ngrok
