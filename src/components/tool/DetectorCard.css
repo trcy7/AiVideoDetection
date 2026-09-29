@@ -96,15 +96,6 @@
 .dcard__fill--fake { background: var(--color-fake-mark); }
 .dcard__fill--uncertain { background: var(--color-uncertain-mark); }
 
-.dcard__threshold {
-  position: absolute;
-  top: -4px;
-  width: 2px;
-  height: 16px;
-  margin-left: -1px;
-  background: var(--color-text);
-}
-
 .dcard__desc {
   font-size: var(--text-sm);
   line-height: 1.5;
