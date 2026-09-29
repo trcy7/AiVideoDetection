@@ -2,7 +2,6 @@ import { useEffect } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { NavBar } from "./NavBar";
 import { Footer } from "./sections/Footer";
-import { ThemeToggle } from "../theme/ThemeToggle";
 
 // Restores hash targets after route changes; plain route changes scroll to top.
 function ScrollManager() {
@@ -31,7 +30,6 @@ export function Layout() {
         <Outlet />
       </main>
       <Footer />
-      <ThemeToggle />
     </>
   );
 }

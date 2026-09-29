@@ -81,3 +81,11 @@
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   }
 }
+
+@media (pointer: coarse) {
+  .footer__link {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}

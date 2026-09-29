@@ -1,10 +1,11 @@
+/* Sits in the header. It used to float bottom-right, where it covered the
+   dropzone at 320px, the URL field at 480, the Analyze button at 600 and the
+   footer links on the results page. */
 .theme-toggle {
-  position: fixed;
-  right: clamp(16px, 3vw, 28px);
-  bottom: clamp(16px, 3vw, 28px);
-  z-index: 60;
-  width: 46px;
-  height: 46px;
+  position: relative;        /* containing block for the two icons */
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
   display: grid;
   place-items: center;
   border-radius: 50%;
@@ -19,7 +20,7 @@
 }
 
 .theme-toggle:hover {
-  transform: translateY(-2px);
+  transform: none;
   border-color: var(--color-border-strong);
   box-shadow: var(--shadow-lg), inset 0 1px 0 var(--card-highlight);
 }

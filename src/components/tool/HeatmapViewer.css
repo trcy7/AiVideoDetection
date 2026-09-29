@@ -166,3 +166,11 @@
     font-size: 0.62rem;
   }
 }
+
+/* A 24px-tall range is hard to grab with a thumb; the track stays the same
+   size, the control just gets room around it. */
+@media (pointer: coarse) {
+  .heatmap__field input[type="range"] {
+    height: 44px;
+  }
+}

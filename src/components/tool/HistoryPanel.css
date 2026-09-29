@@ -364,3 +364,17 @@
     height: 30px;
   }
 }
+
+@media (pointer: coarse) {
+  .history__clear {
+    min-height: 44px;
+    padding-inline: var(--space-2);
+  }
+  .history__chip {
+    min-height: 40px;
+  }
+  .hcard__delete {
+    width: 44px;
+    height: 44px;
+  }
+}

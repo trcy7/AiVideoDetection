@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
+import { ThemeToggle } from "../theme/ThemeToggle";
 import "./NavBar.css";
 
 const NAV_LINKS = [
@@ -43,6 +44,7 @@ export function NavBar() {
         </nav>
 
         <div className="navbar__actions">
+          <ThemeToggle />
           <button
             type="button"
             className="navbar__burger"

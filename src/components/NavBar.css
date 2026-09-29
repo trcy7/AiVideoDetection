@@ -165,3 +165,14 @@
     padding: var(--space-3);
   }
 }
+
+/* 25px of tappable height is below the 44px guideline on a phone */
+@media (pointer: coarse) {
+  .navbar__brand {
+    min-height: 44px;
+  }
+  .theme-toggle {
+    width: 44px;
+    height: 44px;
+  }
+}
