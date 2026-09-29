@@ -97,11 +97,15 @@ def _claim_analysis_fetch():
             _analysis_fetches -= 1
 
 # Previews add platform traffic for decoration. Set ECNET_PREVIEW=0 to drop
-# them if a site starts refusing; the poster still renders. ECNET_PREVIEW_AUDIO=0
-# is the lighter step: on a DASH platform the audio track is a SECOND request
-# per preview, and request count is what got TikTok refusing before.
+# them if a site starts refusing; the poster still renders.
+#
+# Audio is OFF by default and opt-in via ECNET_PREVIEW_AUDIO=1. On a DASH
+# platform the audio track is a SECOND request per preview, and the number of
+# requests per analysis is exactly what had TikTok answering with a connection
+# reset. The clip plays muted in every surface that shows it, so the track buys
+# an unmute button on one panel -- not worth reopening that.
 _PREVIEW_ENABLED = os.getenv("ECNET_PREVIEW", "1") != "0"
-_PREVIEW_AUDIO = os.getenv("ECNET_PREVIEW_AUDIO", "1") != "0"
+_PREVIEW_AUDIO = os.getenv("ECNET_PREVIEW_AUDIO", "0") == "1"
 
 _hits: dict[str, list[float]] = {}
 _all_hits: list[float] = []
@@ -473,8 +477,7 @@ def _shrink_preview(src: Path) -> Path:
                  "-t", str(PREVIEW_SECONDS),
                  "-vf", vf,
                  "-c:v", "libx264", "-crf", "24", "-preset", "fast",
-                 # the panel plays muted, but it has controls -- keep a track
-                 # to unmute. Harmless when the source has no audio stream.
+                 # silent unless ECNET_PREVIEW_AUDIO=1; see the note there
                  *(("-c:a", "aac", "-b:a", "96k") if _PREVIEW_AUDIO else ("-an",)),
                  "-movflags", "+faststart",   # play before the whole file arrives
                  str(dst)],
@@ -519,10 +522,10 @@ def preview_url(body: AnalyzeUrlIn) -> Response:
         has_ffmpeg = shutil.which("ffmpeg") is not None
         # With ffmpeg only PREVIEW_SECONDS of the stream is fetched, so the good
         # rendition costs a few megabytes however long the source -- asking for
-        # the worst one bought nothing and cost every pixel. bv*+ba adds a
-        # second fragment request per preview, which is why the whole fetch
-        # stays inside _fetch_lock. Without ffmpeg nothing can be merged or
-        # trimmed, so that path takes one muxed file and caps its size.
+        # the worst one bought nothing and cost every pixel. Video only, so this
+        # stays ONE request per preview, the count it has always been. Without
+        # ffmpeg nothing can be merged or trimmed, so that path takes one muxed
+        # file and caps its size.
         # No height filter either way: portrait clips are e.g. 576x1024, and
         # filtering on height excludes every vertical video -- most of what
         # gets pasted.
