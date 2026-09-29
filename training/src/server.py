@@ -15,6 +15,7 @@ import socket
 import threading
 import tempfile
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
@@ -70,6 +71,30 @@ _infer_lock = threading.Lock()
 # reset. Serialising them costs a few seconds of latency and keeps the fetches
 # looking like one visitor.
 _fetch_lock = threading.Lock()
+
+# ...but serialising means the preview's download delays the analysis's, and
+# that wait counts against the tunnel's request ceiling. An analysis is the
+# thing the user is waiting for, so it announces itself here and the preview
+# steps aside rather than queueing in front of it.
+_analysis_fetches = 0
+_analysis_fetches_lock = threading.Lock()
+
+
+def _analysis_fetch_active() -> bool:
+    with _analysis_fetches_lock:
+        return _analysis_fetches > 0
+
+
+@contextmanager
+def _claim_analysis_fetch():
+    global _analysis_fetches
+    with _analysis_fetches_lock:
+        _analysis_fetches += 1
+    try:
+        yield
+    finally:
+        with _analysis_fetches_lock:
+            _analysis_fetches -= 1
 
 # Previews double the platform traffic for decoration. Set ECNET_PREVIEW=0 to
 # drop them if a site starts refusing; the poster still renders.
@@ -337,7 +362,9 @@ def _download_clip(url: str) -> tuple[Path, Path, str, bool]:
             None, [(0, MAX_URL_SECONDS)])
         opts["force_keyframes_at_cuts"] = True
     try:
-        with _fetch_lock, yt_dlp.YoutubeDL(opts) as ydl:
+        # claimed BEFORE the lock, so a preview arriving while this one is
+        # still queued also steps aside instead of getting in front
+        with _claim_analysis_fetch(), _fetch_lock, yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=True)
     except Exception as e:
         shutil.rmtree(tmpdir, ignore_errors=True)
@@ -472,7 +499,9 @@ def preview_url(body: AnalyzeUrlIn) -> Response:
     twice. 204 when it cannot be produced -- the viewport falls back to the
     poster, and decoration must never fail an analysis.
     """
-    if not _PREVIEW_ENABLED:
+    if not _PREVIEW_ENABLED or _analysis_fetch_active():
+        # An analysis is already fetching. Queueing behind it would add this
+        # download to the wait the user actually feels, for decoration.
         return Response(status_code=204)
     url = body.url.strip()
     _reject_non_video_url(url)
