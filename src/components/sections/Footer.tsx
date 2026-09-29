@@ -23,10 +23,9 @@ export function Footer() {
             ECNet
           </div>
           <p className="footer__blurb">
-            ECNet is a research project exploring explainable detection of
-            AI-generated video. It analyzes whole frames for the traces
-            generators leave behind — and shows its evidence instead of asking
-            for blind trust.
+            ECNet detects fully AI-generated video. A two-branch model scores
+            each clip and returns a verdict, a calibrated score, a confidence
+            figure, and a frame-level heatmap of the regions behind it.
           </p>
         </div>
 
