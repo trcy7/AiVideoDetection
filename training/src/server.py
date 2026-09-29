@@ -224,7 +224,7 @@ def health() -> dict:
 
 
 MAX_URL_SECONDS = 60          # only the first minute is fetched and scored
-PREVIEW_SECONDS = 8
+PREVIEW_SECONDS = 15
 # This clip is no longer decoration. The results panel plays it with controls
 # and the history row replays it, so for a link it is the only video the user
 # ever sees -- 360p at crf 32 looked like a thumbnail.
@@ -232,7 +232,7 @@ PREVIEW_HEIGHT = 720
 # Ceiling for one preview. With ffmpeg the trim+re-encode lands well under it;
 # without ffmpeg the untrimmed file blows past and the endpoint 204s, which is
 # the intended degradation -- the poster still shows.
-PREVIEW_MAX_BYTES = 8_000_000
+PREVIEW_MAX_BYTES = 12_000_000
 MAX_URL_BYTES = 200_000_000
 
 
@@ -443,8 +443,11 @@ def _shrink_preview(src: Path) -> Path:
                  "-t", str(PREVIEW_SECONDS),
                  "-vf", vf,
                  "-c:v", "libx264", "-crf", "24", "-preset", "fast",
+                 # the panel plays muted, but it has controls -- keep a track
+                 # to unmute. Harmless when the source has no audio stream.
+                 "-c:a", "aac", "-b:a", "96k",
                  "-movflags", "+faststart",   # play before the whole file arrives
-                 "-an", str(dst)],
+                 str(dst)],
                 check=True, timeout=90, capture_output=True,
             )
         except Exception:
@@ -484,14 +487,16 @@ def preview_url(body: AnalyzeUrlIn) -> Response:
         has_ffmpeg = shutil.which("ffmpeg") is not None
         # With ffmpeg only PREVIEW_SECONDS of the stream is fetched, so the good
         # rendition costs a few megabytes however long the source -- asking for
-        # the worst one bought nothing and cost every pixel. Without ffmpeg the
-        # whole file would arrive, so there the smallest rendition still wins.
+        # the worst one bought nothing and cost every pixel. bv*+ba adds a
+        # second fragment request per preview, which is why the whole fetch
+        # stays inside _fetch_lock. Without ffmpeg nothing can be merged or
+        # trimmed, so that path takes one muxed file and caps its size.
         # No height filter either way: portrait clips are e.g. 576x1024, and
         # filtering on height excludes every vertical video -- most of what
         # gets pasted.
         opts = {
-            "format": ("bv*[ext=mp4]/bv*/b[ext=mp4]/b" if has_ffmpeg
-                       else "worstvideo[ext=mp4]/worstvideo/worst[ext=mp4]/worst"),
+            "format": ("bv*+ba/b[ext=mp4]/bv*/b" if has_ffmpeg
+                       else "worst[ext=mp4]/worst"),
             "outtmpl": str(tmpdir / "p.%(ext)s"),
             "noplaylist": True, "quiet": True, "no_warnings": True,
             "noprogress": True, "socket_timeout": 20,
@@ -511,7 +516,8 @@ def preview_url(body: AnalyzeUrlIn) -> Response:
         files = [f for f in tmpdir.iterdir() if f.is_file() and f.stat().st_size > 1000]
         if not files:
             return Response(status_code=204)
-        # the video track, not a stray fragment: the largest of what landed
+        # after a merge there is one file; before it, the video track is the
+        # larger of the two. Either way the largest is the one to encode.
         best = max(files, key=lambda f: f.stat().st_size)
         best = _shrink_preview(best)
         if best.stat().st_size > PREVIEW_MAX_BYTES:
