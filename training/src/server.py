@@ -224,13 +224,15 @@ def health() -> dict:
 
 
 MAX_URL_SECONDS = 60          # only the first minute is fetched and scored
-PREVIEW_SECONDS = 8           # decorative loop behind the scan line
-PREVIEW_HEIGHT = 360
-# Bandwidth ceiling for decoration. With ffmpeg the trim+re-encode lands well
-# under this; without it the untrimmed file blows past and the endpoint 204s,
-# which is the intended degradation -- the poster still shows. Better to serve
-# no preview than multiple MB per analysis over a metered tunnel.
-PREVIEW_MAX_BYTES = 1_500_000
+PREVIEW_SECONDS = 8
+# This clip is no longer decoration. The results panel plays it with controls
+# and the history row replays it, so for a link it is the only video the user
+# ever sees -- 360p at crf 32 looked like a thumbnail.
+PREVIEW_HEIGHT = 720
+# Ceiling for one preview. With ffmpeg the trim+re-encode lands well under it;
+# without ffmpeg the untrimmed file blows past and the endpoint 204s, which is
+# the intended degradation -- the poster still shows.
+PREVIEW_MAX_BYTES = 8_000_000
 MAX_URL_BYTES = 200_000_000
 
 
@@ -424,28 +426,38 @@ def resolve_url(body: AnalyzeUrlIn) -> dict:
 
 
 def _shrink_preview(src: Path) -> Path:
-    """Re-encode to a small, fixed-height clip. The source rendition is sized
-    for viewing, but this plays at a few hundred pixels behind a scan line and
-    is streamed on every analysis -- so spend CPU once to save the bandwidth.
+    """Re-encode to a bounded-height clip. Caps the height instead of forcing
+    it, so a source already below the cap is not upscaled into blur, and keeps
+    the longest edge sane for a panel that is a few hundred pixels wide.
     Returns the original unchanged if ffmpeg is absent or the encode fails."""
     import subprocess
 
     if shutil.which("ffmpeg") is None:
         return src
     dst = src.with_name("small.mp4")
-    try:
-        subprocess.run(
-            ["ffmpeg", "-y", "-v", "error", "-i", str(src),
-             "-t", str(PREVIEW_SECONDS),
-             "-vf", "scale=-2:360",        # -2 keeps width even, as h264 needs
-             "-c:v", "libx264", "-crf", "32", "-preset", "veryfast",
-             "-movflags", "+faststart",    # play before the whole file arrives
-             "-an", str(dst)],
-            check=True, timeout=90, capture_output=True,
-        )
-    except Exception:
-        return src
-    return dst if dst.exists() and dst.stat().st_size > 1000 else src
+
+    def encode(vf: str) -> bool:
+        try:
+            subprocess.run(
+                ["ffmpeg", "-y", "-v", "error", "-i", str(src),
+                 "-t", str(PREVIEW_SECONDS),
+                 "-vf", vf,
+                 "-c:v", "libx264", "-crf", "24", "-preset", "fast",
+                 "-movflags", "+faststart",   # play before the whole file arrives
+                 "-an", str(dst)],
+                check=True, timeout=90, capture_output=True,
+            )
+        except Exception:
+            return False
+        return dst.exists() and dst.stat().st_size > 1000
+
+    # -2 keeps the width even, as h264 needs; min() caps the height without
+    # upscaling a source that is already smaller. If this build's filter parser
+    # rejects the expression, fall back to the plain cap rather than return the
+    # untouched download, which would blow the size ceiling and serve nothing.
+    if encode(f"scale=-2:'min({PREVIEW_HEIGHT},ih)'") or encode(f"scale=-2:{PREVIEW_HEIGHT}"):
+        return dst
+    return src
 
 
 @app.post("/preview-url", dependencies=[Depends(_fetch_limit)])
@@ -469,16 +481,22 @@ def preview_url(body: AnalyzeUrlIn) -> Response:
 
     tmpdir = Path(tempfile.mkdtemp(prefix="ecnet_prev_"))
     try:
-        # No height filter: portrait clips are e.g. 576x1024, so filtering on
-        # height excludes every vertical video -- most of what gets pasted.
-        # Ask for the smallest rendition instead and let the time trim bound it.
+        has_ffmpeg = shutil.which("ffmpeg") is not None
+        # With ffmpeg only PREVIEW_SECONDS of the stream is fetched, so the good
+        # rendition costs a few megabytes however long the source -- asking for
+        # the worst one bought nothing and cost every pixel. Without ffmpeg the
+        # whole file would arrive, so there the smallest rendition still wins.
+        # No height filter either way: portrait clips are e.g. 576x1024, and
+        # filtering on height excludes every vertical video -- most of what
+        # gets pasted.
         opts = {
-            "format": "worstvideo[ext=mp4]/worstvideo/worst[ext=mp4]/worst",
+            "format": ("bv*[ext=mp4]/bv*/b[ext=mp4]/b" if has_ffmpeg
+                       else "worstvideo[ext=mp4]/worstvideo/worst[ext=mp4]/worst"),
             "outtmpl": str(tmpdir / "p.%(ext)s"),
             "noplaylist": True, "quiet": True, "no_warnings": True,
             "noprogress": True, "socket_timeout": 20,
         }
-        if shutil.which("ffmpeg"):
+        if has_ffmpeg:
             # a few seconds is small whatever the clip's length
             opts["download_ranges"] = yt_dlp.utils.download_range_func(
                 None, [(0, PREVIEW_SECONDS)])
@@ -493,8 +511,9 @@ def preview_url(body: AnalyzeUrlIn) -> Response:
         files = [f for f in tmpdir.iterdir() if f.is_file() and f.stat().st_size > 1000]
         if not files:
             return Response(status_code=204)
-        best = min(files, key=lambda f: f.stat().st_size)
-        best = _shrink_preview(best)     # a few MB is too much for decoration
+        # the video track, not a stray fragment: the largest of what landed
+        best = max(files, key=lambda f: f.stat().st_size)
+        best = _shrink_preview(best)
         if best.stat().st_size > PREVIEW_MAX_BYTES:
             return Response(status_code=204)
         return Response(
