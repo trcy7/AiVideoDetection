@@ -104,7 +104,6 @@ export function ResultsPage() {
               result={a.display.result}
               videoUrl={a.display.videoUrl}
               thumbnail={a.display.thumbnail}
-              fileSize={a.display.fileSize}
               metadata={a.display.metadata}
               history={a.history}
               selectedHistoryId={a.display.selectedId}

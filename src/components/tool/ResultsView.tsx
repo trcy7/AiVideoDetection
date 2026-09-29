@@ -11,7 +11,6 @@ interface ResultsViewProps {
   result: AnalysisResult;
   videoUrl: string | null;
   thumbnail: string | null;
-  fileSize: number;
   metadata: VideoMetadata;
   history: HistoryItem[];
   selectedHistoryId: string | null;
@@ -29,7 +28,6 @@ export function ResultsView({
   result,
   videoUrl,
   thumbnail,
-  fileSize,
   metadata,
   history,
   selectedHistoryId,
@@ -57,7 +55,6 @@ export function ResultsView({
           <DetectorCard result={result} />
           <VideoPreview
             fileName={result.fileName}
-            fileSize={fileSize}
             metadata={metadata}
             verdict={result.verdict}
             videoUrl={videoUrl}

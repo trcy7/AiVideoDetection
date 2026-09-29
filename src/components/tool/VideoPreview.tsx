@@ -1,11 +1,9 @@
 import type { Verdict, VideoMetadata } from "../../types";
-import { formatBytes } from "../../utils/validateVideoFile";
 import { formatDuration } from "../../utils/videoMetadata";
 import "./VideoPreview.css";
 
 interface VideoPreviewProps {
   fileName: string;
-  fileSize: number;
   metadata: VideoMetadata;
   verdict: Verdict;
   /** Live analyses have the object URL; history restores only a thumbnail. */
@@ -23,7 +21,6 @@ const DASH = "—";
 
 export function VideoPreview({
   fileName,
-  fileSize,
   metadata,
   verdict,
   videoUrl,
@@ -38,7 +35,6 @@ export function VideoPreview({
       label: "Duration",
       value: metadata.duration !== null ? formatDuration(metadata.duration) : DASH,
     },
-    { label: "Size", value: fileSize > 0 ? formatBytes(fileSize) : DASH },
   ];
 
   return (
