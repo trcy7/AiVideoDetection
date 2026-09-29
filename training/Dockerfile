@@ -32,6 +32,7 @@ ENV ECNET_HOST=0.0.0.0 \
     ECNET_RATE_GLOBAL=120 \
     ECNET_RATE_GLOBAL_WINDOW=3600 \
     ECNET_PREVIEW=1 \
+    ECNET_PREVIEW_AUDIO=1 \
     PYTHONUNBUFFERED=1
 
 # Persist the audit trail + feedback across restarts.

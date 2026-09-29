@@ -96,9 +96,12 @@ def _claim_analysis_fetch():
         with _analysis_fetches_lock:
             _analysis_fetches -= 1
 
-# Previews double the platform traffic for decoration. Set ECNET_PREVIEW=0 to
-# drop them if a site starts refusing; the poster still renders.
+# Previews add platform traffic for decoration. Set ECNET_PREVIEW=0 to drop
+# them if a site starts refusing; the poster still renders. ECNET_PREVIEW_AUDIO=0
+# is the lighter step: on a DASH platform the audio track is a SECOND request
+# per preview, and request count is what got TikTok refusing before.
 _PREVIEW_ENABLED = os.getenv("ECNET_PREVIEW", "1") != "0"
+_PREVIEW_AUDIO = os.getenv("ECNET_PREVIEW_AUDIO", "1") != "0"
 
 _hits: dict[str, list[float]] = {}
 _all_hits: list[float] = []
@@ -472,7 +475,7 @@ def _shrink_preview(src: Path) -> Path:
                  "-c:v", "libx264", "-crf", "24", "-preset", "fast",
                  # the panel plays muted, but it has controls -- keep a track
                  # to unmute. Harmless when the source has no audio stream.
-                 "-c:a", "aac", "-b:a", "96k",
+                 *(("-c:a", "aac", "-b:a", "96k") if _PREVIEW_AUDIO else ("-an",)),
                  "-movflags", "+faststart",   # play before the whole file arrives
                  str(dst)],
                 check=True, timeout=90, capture_output=True,
@@ -524,8 +527,10 @@ def preview_url(body: AnalyzeUrlIn) -> Response:
         # filtering on height excludes every vertical video -- most of what
         # gets pasted.
         opts = {
-            "format": ("bv*+ba/b[ext=mp4]/bv*/b" if has_ffmpeg
-                       else "worst[ext=mp4]/worst"),
+            "format": (
+                ("bv*+ba/b[ext=mp4]/bv*/b" if _PREVIEW_AUDIO else "bv*[ext=mp4]/bv*/b")
+                if has_ffmpeg else "worst[ext=mp4]/worst"
+            ),
             "outtmpl": str(tmpdir / "p.%(ext)s"),
             "noplaylist": True, "quiet": True, "no_warnings": True,
             "noprogress": True, "socket_timeout": 20,
