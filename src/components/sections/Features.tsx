@@ -69,9 +69,9 @@ export function Features() {
     <section id="features" className="section reveal" ref={ref}>
       <div className="container">
         <span className="hud-label section__eyebrow">Capabilities</span>
-        <h2 className="section__heading">Built for scrutiny</h2>
+        <h2 className="section__heading">What each analysis returns</h2>
         <p className="section__subheading">
-          Detection you can interrogate, not a black box.
+          Every verdict is returned with the frame-level evidence behind it.
         </p>
 
         <div className="features">
@@ -82,8 +82,8 @@ export function Features() {
             </div>
             <h3 className="feature-card__title">Explainable heatmaps</h3>
             <p className="feature-card__description">
-              Overlays show exactly which regions drove the verdict — judge the
-              evidence yourself instead of trusting a bare score.
+              An overlay marks the regions that drove the verdict, so the
+              score can be checked against the frame it came from.
             </p>
             <HeatmapViz />
           </article>
