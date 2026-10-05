@@ -113,6 +113,12 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const analysisStartedAt = useRef<number>(0);
   const savedToHistory = useRef(false);
   const backendRequestStarted = useRef(false);
+  /** Generation counter for the CURRENT source. Every async callback below
+   *  captures it and bails if it has moved on -- without this, the preview and
+   *  metadata of a link the user already navigated away from land on the new
+   *  one, which is why analysing a second link showed the FIRST link's video.
+   *  A boolean "in flight" flag cannot express this: two runs overlap. */
+  const runId = useRef(0);
 
   const historyStore = useAnalysisHistory();
 
@@ -125,6 +131,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const acceptFile = useCallback((accepted: File) => {
+    runId.current += 1;                 // supersede anything still in flight
     metadataCleanup.current?.();
     savedToHistory.current = false;
     backendRequestStarted.current = false;
@@ -158,6 +165,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
    *  URL the user just typed and ask them to click again. On failure the flow
    *  still falls back to "ready", which is where the retry lives. */
   const analyzeUrl = useCallback((url: string) => {
+    const myRun = (runId.current += 1);   // this link's generation
     metadataCleanup.current?.();
     metadataCleanup.current = null;
     savedToHistory.current = false;
@@ -184,6 +192,10 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     // datacenter IP is what gets the connection reset.
     void resolveUrlMeta(url)
       .then((m) => {
+        // The user may have pasted another link while this one was resolving.
+        // Writing m here would show the OLD clip's duration and resolution
+        // against the new link, and would queue the old preview behind it.
+        if (runId.current !== myRun) return null;
         setSourceMeta(m);
         // The same limit uploads are held to. The server rejects it anyway,
         // but only after the analysis has been queued -- catching it here
@@ -212,6 +224,11 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       })
       .then((blob) => {
         if (!blob) return;
+        // THE BUG this guard fixes: a preview can take tens of seconds to fetch
+        // and transcode. Without it, the previous link's clip arrives after the
+        // user has started a new one and is painted as the new one's video.
+        // Drop the blob rather than leak an object URL for it.
+        if (runId.current !== myRun) return;
         previewBlob.current = blob;
         setPreviewUrl(URL.createObjectURL(blob));
       });
@@ -220,6 +237,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   }, [dropPreview]);
 
   const reset = useCallback(() => {
+    runId.current += 1;                 // abandon anything still resolving
     metadataCleanup.current?.();
     metadataCleanup.current = null;
     savedToHistory.current = false;
@@ -334,8 +352,12 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
 
     if (!backendRequestStarted.current) {
       backendRequestStarted.current = true;
+      const myRun = runId.current;      // the source this request belongs to
       (file ? analyzeWithBackend(file) : analyzeUrlWithBackend(sourceUrl as string))
         .then((backend) => {
+          // A verdict for a source the user has moved on from must not be
+          // shown, scored, or written to history against the new one.
+          if (runId.current !== myRun) return;
           const processingMs = Math.round(performance.now() - analysisStartedAt.current);
           const withoutReport = {
             fileName: backend.fileName,
@@ -357,6 +379,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
           finishAnalysis(res, file?.size ?? 0);
         })
         .catch((err: unknown) => {
+          if (runId.current !== myRun) return;   // stale failure, not this source's
           setAnalysisError(err instanceof Error ? err.message : "Analysis failed.");
           backendRequestStarted.current = false;
           setProgress(0);
@@ -398,6 +421,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const selectHistory = useCallback(
     (item: HistoryItem) => {
       if (phase === "preprocessing" || phase === "analyzing") return;
+      runId.current += 1;               // a history pick supersedes a pending fetch
       setSelectedHistory(item);
     },
     [phase],
