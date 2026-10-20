@@ -1,6 +1,7 @@
 import type { AnalysisResult } from "../../types";
 import { cleanModelVersion } from "../../utils/realBackend";
 import { formatScanTime } from "../../utils/videoMetadata";
+import { isPartial, segmentLabel } from "../../utils/segments";
 import "./ResultHeader.css";
 
 interface ResultHeaderProps {
@@ -50,6 +51,11 @@ export function ResultHeader({ result, onAnalyzeAnother }: ResultHeaderProps) {
             {", "}
             {completed.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
           </li>
+          {isPartial(result.segment) && (
+            <li>
+              Part <strong className="rhead__mono">{segmentLabel(result.segment)}</strong>
+            </li>
+          )}
           <li>
             Scan time <strong>{formatScanTime(result.processingMs)}</strong>
           </li>

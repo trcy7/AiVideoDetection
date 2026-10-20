@@ -10,6 +10,8 @@ import "./ResultsView.css";
 interface ResultsViewProps {
   result: AnalysisResult;
   videoUrl: string | null;
+  /** Source time at second 0 of videoUrl (a link's preview starts at its part). */
+  videoOffset?: number;
   thumbnail: string | null;
   metadata: VideoMetadata;
   history: HistoryItem[];
@@ -27,6 +29,7 @@ interface ResultsViewProps {
 export function ResultsView({
   result,
   videoUrl,
+  videoOffset = 0,
   thumbnail,
   metadata,
   history,
@@ -48,7 +51,7 @@ export function ResultsView({
             <h2 id="rview-evidence-title" className="rview__h2">GradCAM heatmap</h2>
             <p className="rview__sub">Per-frame activation map. Red marks flagged regions.</p>
           </div>
-          <HeatmapViewer frames={result.frames} videoUrl={videoUrl} thumbnail={thumbnail} />
+          <HeatmapViewer frames={result.frames} videoUrl={videoUrl} videoOffset={videoOffset} thumbnail={thumbnail} />
         </section>
 
         <div className="rview__side">
@@ -59,6 +62,8 @@ export function ResultsView({
             verdict={result.verdict}
             videoUrl={videoUrl}
             thumbnail={thumbnail}
+            segment={result.segment}
+            videoOffset={videoOffset}
           />
         </div>
       </div>

@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { HistoryItem, Verdict } from "../../types";
 import { getVideo } from "../../utils/videoStore";
 import { formatScanTime } from "../../utils/videoMetadata";
+import { formatSpan, isPartial, keepInside } from "../../utils/segments";
 import "./HistoryPanel.css";
 
 const VERDICT_SHORT: Record<Verdict, string> = {
@@ -26,6 +27,13 @@ interface HistoryCardProps {
 
 export function HistoryCard({ item, selected, onSelect, onRemove }: HistoryCardProps) {
   const { result } = item;
+  // the stored clip of a link is its preview, which already starts at the part
+  const seg = isPartial(result.segment) ? result.segment : null;
+  const shift = result.clipStart ?? 0;
+  const part = useMemo(
+    () => (seg ? { start: Math.max(0, seg.start - shift), end: seg.end - shift } : null),
+    [seg, shift],
+  );
   const videoRef = useRef<HTMLVideoElement>(null);
   const urlRef = useRef<string | null>(null);
   const pending = useRef(false);
@@ -53,12 +61,14 @@ export function HistoryCard({ item, selected, onSelect, onRemove }: HistoryCardP
   useEffect(() => {
     const v = videoRef.current;
     if (!v || !clipUrl) return;
-    if (hot) void v.play().catch(() => {});
-    else {
+    if (hot) {
+      if (part && (v.currentTime < part.start || v.currentTime >= part.end)) v.currentTime = part.start;
+      void v.play().catch(() => {});
+    } else {
       v.pause();
-      v.currentTime = 0;
+      v.currentTime = part?.start ?? 0;
     }
-  }, [hot, clipUrl]);
+  }, [hot, clipUrl, part]);
 
   useEffect(
     () => () => {
@@ -90,6 +100,7 @@ export function HistoryCard({ item, selected, onSelect, onRemove }: HistoryCardP
               loop
               playsInline
               preload="metadata"
+              onTimeUpdate={(e) => keepInside(e.currentTarget, part)}
             />
           ) : item.thumbnail ? (
             <img src={item.thumbnail} alt="" loading="lazy" />
@@ -110,6 +121,11 @@ export function HistoryCard({ item, selected, onSelect, onRemove }: HistoryCardP
               {VERDICT_SHORT[result.verdict]}
             </span>
             <span className="hcard__confidence">{Math.round(result.confidence)}%</span>
+            {seg && (
+              <span className="hcard__part" title="Part analyzed">
+                {formatSpan(seg)}
+              </span>
+            )}
           </span>
           <span className="hcard__row hcard__row--meta">
             <span>{shortDate(item.savedAt)}</span>

@@ -1,4 +1,4 @@
-import type { BranchScores, HeatmapFrame, Verdict, WindowScore } from "../types";
+import type { BranchScores, HeatmapFrame, Verdict, VideoSegment, WindowScore } from "../types";
 
 /** Set VITE_USE_REAL_BACKEND=true in .env.local to call a real trained
  *  model (via training/src/server.py) instead of the built-in mock. */
@@ -39,6 +39,11 @@ export interface BackendAnalysis {
   frames: HeatmapFrame[];
   /** Per-window scores behind fakeScore; absent on servers predating them. */
   windows?: WindowScore[];
+  /** The part of the upload that was scored; absent when it was all of it,
+   *  and on servers predating segments (which score the whole file). */
+  segment?: VideoSegment;
+  /** The link, for link analyses. */
+  sourceUrl?: string;
   modelVersion: string;
   /** Audit-trail row id; null when the server runs without storage. */
   analysisId?: string | null;
@@ -98,37 +103,49 @@ export async function resolveUrlMeta(url: string): Promise<LinkMeta | null> {
   }
 }
 
-/** A few seconds of low-res video for the scanning view. Returns the blob, not
- *  an object URL: the caller shows it AND persists it as the history clip for a
- *  link, which has no local file to store. Null when the server declines (204)
- *  or anything fails -- the viewport then keeps its poster. */
-export async function fetchPreviewClip(url: string): Promise<Blob | null> {
+/** A few seconds of low-res video for the scanning view, from `start` on. Returns
+ *  the blob, not an object URL: the caller shows it AND persists it as the
+ *  history clip for a link, which has no local file to store. `start` is where
+ *  the clip begins in the source (0 from servers that cannot cut). Null when the
+ *  server declines (204) or anything fails -- the viewport then keeps its poster. */
+export async function fetchPreviewClip(
+  url: string,
+  start = 0,
+): Promise<{ blob: Blob; start: number } | null> {
   if (BACKEND_URL_ERROR) return null;
   try {
     const res = await fetch(`${BACKEND_URL}/preview-url`, {
       method: "POST",
       headers: { ...BACKEND_HEADERS, "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url, start }),
     });
     if (!res.ok || res.status === 204) return null;
     const blob = await res.blob();
-    return blob.size > 0 ? blob : null;
+    const at = Number.parseFloat(res.headers.get("X-Clip-Start") ?? "0");
+    return blob.size > 0 ? { blob, start: Number.isFinite(at) ? at : 0 } : null;
   } catch {
     return null;
   }
 }
 
-/** Analyze a public video link. The server fetches at most the first minute,
- *  scores it, and deletes the download -- nothing is uploaded from here. */
-export async function analyzeUrlWithBackend(url: string): Promise<BackendAnalysis> {
+/** Analyze a public video link. The server fetches only the chosen part (by
+ *  default the first minute), scores it, and deletes the download -- nothing
+ *  is uploaded from here. */
+export async function analyzeUrlWithBackend(
+  url: string,
+  segment: { start: number; end: number } | null = null,
+): Promise<BackendAnalysis> {
   if (BACKEND_URL_ERROR) throw new Error(BACKEND_URL_ERROR);
 
+  const part = segment
+    ? { start: +segment.start.toFixed(3), duration: +(segment.end - segment.start).toFixed(3) }
+    : {};
   let res: Response;
   try {
     res = await fetch(`${BACKEND_URL}/analyze-url`, {
       method: "POST",
       headers: { ...BACKEND_HEADERS, "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url, ...part }),
     });
   } catch {
     throw new Error(
@@ -152,11 +169,19 @@ export async function analyzeUrlWithBackend(url: string): Promise<BackendAnalysi
   return data;
 }
 
-export async function analyzeWithBackend(file: File): Promise<BackendAnalysis> {
+export async function analyzeWithBackend(
+  file: File,
+  segment: { start: number; end: number } | null = null,
+): Promise<BackendAnalysis> {
   if (BACKEND_URL_ERROR) throw new Error(BACKEND_URL_ERROR);
 
   const form = new FormData();
   form.append("video", file, file.name);
+  if (segment) {
+    // the server reads just this span from the original file
+    form.append("start", segment.start.toFixed(3));
+    form.append("duration", (segment.end - segment.start).toFixed(3));
+  }
 
   let res: Response;
   try {

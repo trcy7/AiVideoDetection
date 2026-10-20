@@ -1,13 +1,21 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { USE_REAL_BACKEND } from "../../utils/realBackend";
+import { USE_REAL_BACKEND, resolveUrlMeta } from "../../utils/realBackend";
+import { needsSegment, segmentLabel, type PickSource, type SegmentChoice } from "../../utils/segments";
 import { useAnalysis } from "../../context/AnalysisContext";
 import { useReveal } from "../../hooks/useReveal";
 import { StatsBand } from "../StatsBand";
 import { UploadDropzone } from "./UploadDropzone";
 import { MetadataPanel } from "./MetadataPanel";
 import { HistoryPanel } from "./HistoryPanel";
+import { SegmentPicker } from "./SegmentPicker";
 import "./UploadSection.css";
+
+interface Picking {
+  source: PickSource;
+  duration: number;
+  initial?: SegmentChoice | null;
+}
 
 /** Landing-page upload tool — the first screen. Running an analysis hands off
  *  to /results; the state machine lives in AnalysisContext, so the scan keeps
@@ -17,8 +25,11 @@ export function UploadSection() {
   const navigate = useNavigate();
   const a = useAnalysis();
   const [link, setLink] = useState("");
+  const [picking, setPicking] = useState<Picking | null>(null);
+  const [checkingLink, setCheckingLink] = useState(false);
 
   const inFlight = a.phase === "preprocessing" || a.phase === "analyzing";
+  const part = a.segment;
 
   // mirrors the card's state so the head always says where the user is
   const panelState = inFlight
@@ -31,6 +42,30 @@ export function UploadSection() {
 
   const runAnalysis = () => {
     a.startAnalysis();
+    navigate("/results");
+  };
+
+  const analyzePart = (choice: SegmentChoice) => {
+    if (!picking) return;
+    const seg = { ...choice, sourceDuration: picking.duration };
+    const src = picking.source;
+    if (src.kind === "file") a.analyzeFile(src.file, seg);
+    else a.analyzeUrl(src.url, { meta: src.meta, segment: seg });
+    setPicking(null);
+    navigate("/results");
+  };
+
+  // A link's length decides between the picker and a direct run, so it is read
+  // first; the metadata is handed on so the analysis does not fetch it again.
+  const submitLink = async (v: string) => {
+    setCheckingLink(true);
+    const meta = await resolveUrlMeta(v);
+    setCheckingLink(false);
+    if (meta && needsSegment(meta.durationSec)) {
+      setPicking({ source: { kind: "link", url: v, meta }, duration: meta.durationSec });
+      return;
+    }
+    a.analyzeUrl(v, { meta });
     navigate("/results");
   };
 
@@ -70,7 +105,10 @@ export function UploadSection() {
             <div className="tool__body">
               {a.phase === "idle" && (
                 <>
-                  <UploadDropzone onFileAccepted={a.acceptFile} />
+                  <UploadDropzone
+                    onFileAccepted={a.acceptFile}
+                    onLongFile={(file, duration) => setPicking({ source: { kind: "file", file }, duration })}
+                  />
                   {USE_REAL_BACKEND && (
                     <>
                       <div className="linksep" role="separator" aria-label="or">
@@ -82,9 +120,8 @@ export function UploadSection() {
                         onSubmit={(e) => {
                           e.preventDefault();
                           const v = link.trim();
-                          if (!v) return;
-                          a.analyzeUrl(v);
-                          navigate("/results");
+                          if (!v || checkingLink) return;
+                          void submitLink(v);
                         }}
                       >
                         <h3 className="linkcard__title">Video link</h3>
@@ -134,8 +171,8 @@ export function UploadSection() {
                               </button>
                             )}
                           </div>
-                          <button type="submit" className="linkcard__go" disabled={!link.trim()}>
-                            Analyze
+                          <button type="submit" className="linkcard__go" disabled={!link.trim() || checkingLink}>
+                            {checkingLink ? "Checking…" : "Analyze"}
                           </button>
                         </div>
                       </form>
@@ -152,6 +189,27 @@ export function UploadSection() {
                   <p className="tool__link-ready">
                     <span className="tool__link-url">{a.sourceUrl}</span>
                   </p>
+                  {part && a.sourceMeta && (
+                    <div className="tool__part">
+                      <span className="hud-label">Part to analyze</span>
+                      <strong className="tool__part-span">{segmentLabel(part)}</strong>
+                      <button
+                        type="button"
+                        className="tool__ghost tool__ghost--small"
+                        onClick={() =>
+                          a.sourceUrl &&
+                          a.sourceMeta &&
+                          setPicking({
+                            source: { kind: "link", url: a.sourceUrl, meta: a.sourceMeta },
+                            duration: part.sourceDuration ?? a.sourceMeta.durationSec ?? part.end,
+                            initial: part,
+                          })
+                        }
+                      >
+                        Change
+                      </button>
+                    </div>
+                  )}
                   <div className="tool__actions">
                     <button type="button" className="tool__cta" onClick={runAnalysis}>
                       Try again
@@ -177,6 +235,26 @@ export function UploadSection() {
                     videoUrl={a.videoUrl}
                     onFrameRate={a.onFrameRate}
                   />
+                  {part && (
+                    <div className="tool__part">
+                      <span className="hud-label">Part to analyze</span>
+                      <strong className="tool__part-span">{segmentLabel(part)}</strong>
+                      <button
+                        type="button"
+                        className="tool__ghost tool__ghost--small"
+                        onClick={() =>
+                          a.file &&
+                          setPicking({
+                            source: { kind: "file", file: a.file },
+                            duration: part.sourceDuration ?? a.metadata.duration ?? part.end,
+                            initial: part,
+                          })
+                        }
+                      >
+                        Change
+                      </button>
+                    </div>
+                  )}
                   <div className="tool__actions">
                     <button type="button" className="tool__cta" onClick={runAnalysis}>
                       {a.analysisError ? "Try again" : "Run analysis"}
@@ -233,6 +311,16 @@ export function UploadSection() {
             </div>
           </div>
         </div>
+
+        {picking && (
+          <SegmentPicker
+            source={picking.source}
+            duration={picking.duration}
+            initial={picking.initial}
+            onConfirm={analyzePart}
+            onCancel={() => setPicking(null)}
+          />
+        )}
 
         {a.phase === "idle" && a.history.length > 0 && (
           <div className="tool__history">

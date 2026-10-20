@@ -48,6 +48,14 @@ export interface WindowScore {
   score: number;
 }
 
+/** The part of a long video that was scored, in seconds of the source. */
+export interface VideoSegment {
+  start: number;
+  end: number;
+  /** Length of the whole file; null when the server could not read it. */
+  sourceDuration: number | null;
+}
+
 /** A rendered still for the PDF report: a JPEG data-URL (GradCAM baked in) with
  *  a short caption. */
 export interface ReportFrame {
@@ -82,6 +90,12 @@ export interface AnalysisResult {
   frames: HeatmapFrame[];
   /** Per-window scores behind fakeScore. Absent on older/mock results. */
   windows?: WindowScore[];
+  /** Set when only part of a long video was scored; frame times stay absolute. */
+  segment?: VideoSegment | null;
+  /** The link the result came from; absent for uploads. */
+  sourceUrl?: string | null;
+  /** Source time at second 0 of the stored clip (a link's preview starts at its part). */
+  clipStart?: number | null;
   analyzedAt: string;
   /** Wall-clock analysis time in ms (measured from the flow, not mocked). */
   processingMs: number;

@@ -202,15 +202,17 @@ def _window_probs(model, win_tensor: torch.Tensor, use_tta: bool
     return float(fused.item()), float(spat.item()), float(temp.item()), _v(freq), _v(motion)
 
 
-def _predict_hybrid(video_path: str | Path, model, cfg: dict, device: torch.device) -> dict:
+def _predict_hybrid(video_path: str | Path, model, cfg: dict, device: torch.device,
+                    span: tuple[float | None, float | None] = (None, None)) -> dict:
     """Hybrid: sample windows (count scales with duration) -> fused verdict;
-    GradCAM boxes from the spatial branch. Preprocessing matches training."""
+    GradCAM boxes from the spatial branch. Preprocessing matches training.
+    span=(start_sec, end_sec) analyses only that part of the file."""
     started_at = time.perf_counter()
     ecfg, icfg = cfg["extraction"], cfg["inference"]
     image_size = int(ecfg["image_size"])
     use_tta = bool(icfg.get("tta", True))
 
-    # Analyze the WHOLE clip: cover=True tiles it end to end (back-to-back
+    # Analyze the WHOLE clip (or span): cover=True tiles it end to end (back-to-back
     # windows), instead of a few sparse samples that skipped most of a long clip.
     windows = read_video_windows(
         video_path,
@@ -220,6 +222,8 @@ def _predict_hybrid(video_path: str | Path, model, cfg: dict, device: torch.devi
         fallback_stride=int(ecfg.get("frame_stride", 2)),
         cover=True,
         max_windows=int(icfg.get("max_score_windows", 48)),
+        start_sec=span[0],
+        end_sec=span[1],
     )  # raises ValueError if unreadable
 
     box = None
@@ -374,11 +378,13 @@ def _predict_hybrid(video_path: str | Path, model, cfg: dict, device: torch.devi
     return result
 
 
-def _predict_spatial(video_path: str | Path, model, cfg: dict, device: torch.device) -> dict:
+def _predict_spatial(video_path: str | Path, model, cfg: dict, device: torch.device,
+                     span: tuple[float | None, float | None] = (None, None)) -> dict:
     """Legacy spatial-only flow (old 1-branch checkpoints): per-frame prob + GradCAM."""
     icfg = cfg["inference"]
     use_tta = bool(icfg.get("tta", True))
-    frames = read_video_frames(video_path, int(icfg["frames_per_video"]))  # raises ValueError if unreadable
+    frames = read_video_frames(video_path, int(icfg["frames_per_video"]),
+                               span[0], span[1])  # raises ValueError if unreadable
     image_size = int(cfg["extraction"]["image_size"])
 
     # strip letterbox bars (one box for the whole video) if trained that way
@@ -458,10 +464,12 @@ class Predictor:
         self.model.load_state_dict(_adapt_state_dict(self.model, ckpt["model"]))
         self.model.eval()
 
-    def predict(self, video_path: str | Path) -> dict:
+    def predict(self, video_path: str | Path, start_sec: float | None = None,
+                end_sec: float | None = None) -> dict:
+        span = (start_sec, end_sec)
         if self.arch == "hybrid":
-            return _predict_hybrid(video_path, self.model, self.cfg, self.device)
-        return _predict_spatial(video_path, self.model, self.cfg, self.device)
+            return _predict_hybrid(video_path, self.model, self.cfg, self.device, span)
+        return _predict_spatial(video_path, self.model, self.cfg, self.device, span)
 
 
 def predict(video_path: str | Path, checkpoint_path: str | Path, config_path: str | Path | None = None) -> dict:

@@ -6,6 +6,8 @@ interface HeatmapViewerProps {
   frames: HeatmapFrame[];
   /** Object URL of the uploaded video; frames are drawn from it via canvas. */
   videoUrl: string | null;
+  /** Source time at second 0 of videoUrl (a link's preview starts at its part). */
+  videoOffset?: number;
   /** Saved still frame. Used as the heatmap background when the video can't be
    *  restored (old history item, >80 MB, private mode) so the flagged-region
    *  boxes still overlay a real frame instead of a blank placeholder. */
@@ -14,7 +16,7 @@ interface HeatmapViewerProps {
 
 type DecodeState = "loading" | "ok" | "error";
 
-export function HeatmapViewer({ frames, videoUrl, thumbnail }: HeatmapViewerProps) {
+export function HeatmapViewer({ frames, videoUrl, videoOffset = 0, thumbnail }: HeatmapViewerProps) {
   const [frameIndex, setFrameIndex] = useState(0);
   const [opacity, setOpacity] = useState(70);
   const [decode, setDecode] = useState<DecodeState>(videoUrl ? "loading" : "error");
@@ -188,13 +190,14 @@ export function HeatmapViewer({ frames, videoUrl, thumbnail }: HeatmapViewerProp
     const video = videoRef.current;
     if (!video || decode !== "ok" || !frame) return;
     const end = video.duration && isFinite(video.duration) ? video.duration - 0.05 : undefined;
-    const target = Math.max(0, end !== undefined ? Math.min(frame.time, end) : frame.time);
+    const local = frame.time - videoOffset;
+    const target = Math.max(0, end !== undefined ? Math.min(local, end) : local);
     if (Math.abs(video.currentTime - target) < 0.01) {
       drawCurrentFrame();
       return;
     }
     video.currentTime = target;
-  }, [frame, decode, drawCurrentFrame, drawFrameImage]);
+  }, [frame, decode, drawCurrentFrame, drawFrameImage, videoOffset]);
 
   const step = (delta: number) => {
     setFrameIndex((i) => Math.min(viewFrames.length - 1, Math.max(0, i + delta)));

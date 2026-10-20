@@ -1,0 +1,478 @@
+/* ---- long-video part picker: centred dialog, full-screen sheet on phones ---- */
+
+.segpick {
+  position: fixed;
+  inset: 0;
+  z-index: 100;                       /* above the nav (50) */
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: rgba(6, 10, 18, 0.56);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: segpick-fade 0.18s ease-out;
+}
+
+.segpick__dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(900px, 100%);
+  max-height: min(860px, calc(100dvh - 32px));
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg), inset 0 1px 0 var(--card-highlight);
+  overflow: hidden;
+  animation: segpick-rise 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.segpick__dialog:focus {
+  outline: none;
+}
+
+/* head */
+.segpick__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-5) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  background:
+    radial-gradient(520px 160px at 10% 0%, var(--ambient-glow), transparent 70%),
+    var(--color-surface);
+}
+
+.segpick__heading {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.segpick__eyebrow {
+  color: var(--color-accent);
+}
+
+.segpick__title {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+/* what the split means, under the strip it describes */
+.segpick__about {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+}
+
+.segpick__desc {
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  color: var(--color-text-muted);
+}
+
+.segpick__file {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.segpick__close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: color var(--transition), border-color var(--transition);
+}
+
+.segpick__close:hover {
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+}
+
+/* body: preview left, parts right */
+.segpick__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+  padding: var(--space-5);
+}
+
+.segpick__viewer {
+  position: sticky;
+  top: 0;
+  min-width: 0;
+}
+
+.segpick__stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: min(300px, 40vh);         /* stacked layouts: keep the parts in view */
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: #05080d;
+  border: 1px solid var(--color-border);
+}
+
+.segpick__video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.segpick__badge {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(5, 8, 13, 0.68);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  backdrop-filter: blur(4px);
+}
+
+.segpick__play {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(5, 8, 13, 0.68);
+  color: #fff;
+  cursor: pointer;
+}
+
+/* whole-file strip: one block per part, the chosen one lit */
+.segpick__timeline {
+  position: relative;
+  height: 30px;
+  margin-top: var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-sunken);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.segpick__tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-right: 1px solid var(--color-border-strong);
+  transition: background-color var(--transition);
+}
+
+.segpick__tick:last-of-type {
+  border-right: 0;
+}
+
+.segpick__tick.is-on {
+  background: var(--color-accent-muted);
+  box-shadow: inset 0 0 0 2px var(--color-accent);
+  border-radius: 6px;
+}
+
+.segpick__playhead {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 2px;
+  background: var(--color-text);
+  pointer-events: none;
+}
+
+.segpick__scale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* parts */
+.segpick__parts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.segpick__part {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 8px;
+  text-align: left;
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  cursor: pointer;
+  transition:
+    border-color var(--transition),
+    background-color var(--transition),
+    box-shadow var(--transition);
+}
+
+.segpick__part:hover {
+  border-color: var(--color-border-strong);
+}
+
+.segpick__part.is-selected {
+  border-color: var(--color-accent);
+  background: var(--color-accent-muted);
+  box-shadow: 0 0 0 1px var(--color-accent), 0 0 22px var(--glow-accent);
+}
+
+.segpick__thumb {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--color-surface-sunken);
+}
+
+.segpick__thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.segpick__ph {
+  position: absolute;
+  inset: 0;
+  background: var(--color-surface-sunken);
+}
+
+.segpick__ph.is-loading {
+  background: linear-gradient(
+    100deg,
+    var(--color-surface-sunken) 30%,
+    var(--color-border) 50%,
+    var(--color-surface-sunken) 70%
+  );
+  background-size: 220% 100%;
+  animation: segpick-shimmer 1.2s linear infinite;
+}
+
+/* a link has no frames to show yet: each part is labelled by its start */
+.segpick__tile {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--color-surface-sunken), var(--color-border));
+  font-family: var(--font-mono);
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.segpick__len {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(5, 8, 13, 0.7);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+}
+
+.segpick__meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.segpick__name {
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.segpick__range {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.segpick__radio {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-right: 4px;
+  border-radius: 50%;
+  border: 1.5px solid var(--color-border-strong);
+  color: transparent;
+  transition: background-color var(--transition), border-color var(--transition);
+}
+
+.segpick__part.is-selected .segpick__radio {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
+/* foot */
+.segpick__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
+}
+
+.segpick__note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.segpick__note svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.segpick__actions {
+  display: flex;
+  gap: var(--space-3);
+  flex: none;
+}
+
+/* tablet: one column, parts as a grid of cards */
+@media (max-width: 760px) {
+  .segpick__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .segpick__viewer {
+    position: static;
+  }
+  .segpick__parts {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+  .segpick__part {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--space-2);
+  }
+  .segpick__thumb {
+    grid-column: 1 / -1;
+  }
+}
+
+/* phone: full-screen sheet, actions pinned to the bottom */
+@media (max-width: 560px) {
+  .segpick {
+    padding: 0;
+    place-items: stretch;
+  }
+  .segpick__dialog {
+    width: 100%;
+    height: 100dvh;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+  }
+  .segpick__head {
+    padding: var(--space-4);
+  }
+  .segpick__body {
+    padding: var(--space-4);
+    gap: var(--space-4);
+  }
+  .segpick__parts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .segpick__foot {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom));
+  }
+  .segpick__actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
+  }
+  .segpick__actions .tool__ghost,
+  .segpick__actions .tool__cta {
+    width: 100%;
+    padding-inline: var(--space-3);
+  }
+}
+
+@keyframes segpick-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes segpick-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+}
+
+@keyframes segpick-shimmer {
+  to {
+    background-position: -120% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .segpick,
+  .segpick__dialog,
+  .segpick__ph.is-loading {
+    animation: none;
+  }
+}

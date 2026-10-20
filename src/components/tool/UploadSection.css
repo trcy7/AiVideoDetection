@@ -228,6 +228,26 @@
   flex-wrap: wrap;
 }
 
+/* chosen minute of a long clip, with a way back into the picker */
+.tool__part {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-accent-muted);
+}
+
+.tool__part-span {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
 .tool__cta {
   padding: var(--space-3) var(--space-6);
   min-height: 44px;

@@ -13,6 +13,7 @@ import {
   type AnalysisResult,
   type HistoryItem,
   type VideoMetadata,
+  type VideoSegment,
 } from "../types";
 import { extractVideoMetadata } from "../utils/videoMetadata";
 import { captureThumbnail } from "../utils/captureThumbnail";
@@ -29,7 +30,6 @@ import {
   type LinkMeta,
 } from "../utils/realBackend";
 import { putVideo, getVideo, deleteVideo, clearVideos, pruneVideos } from "../utils/videoStore";
-import { MAX_DURATION_SECONDS } from "../utils/validateVideoFile";
 
 /**
  * The detection flow as a small state machine, lifted to app scope so it
@@ -57,6 +57,8 @@ export interface ResultDisplay {
   fileSize: number;
   metadata: VideoMetadata;
   selectedId: string | null;
+  /** Source time at second 0 of videoUrl: a link's preview starts at its part. */
+  videoOffset: number;
 }
 
 interface AnalysisContextValue {
@@ -73,8 +75,14 @@ interface AnalysisContextValue {
   display: ResultDisplay | null;
   history: HistoryItem[];
   acceptFile: (file: File) => void;
-  /** Analyze a pasted link instead of a local file; starts immediately. */
-  analyzeUrl: (url: string) => void;
+  /** Analyze one part of a long upload; starts immediately. */
+  analyzeFile: (file: File, segment: VideoSegment) => void;
+  /** The part of the current file or link being analyzed; null scores all of it. */
+  segment: VideoSegment | null;
+  /** Analyze a pasted link instead of a local file; starts immediately.
+   *  meta: already resolved, so it is not fetched again (null: tried, failed);
+   *  segment: the chosen part of a video over a minute. */
+  analyzeUrl: (url: string, opts?: { meta?: LinkMeta | null; segment?: VideoSegment | null }) => void;
   sourceUrl: string | null;
   /** Title/poster for the pasted link; null until resolved, or if it failed. */
   sourceMeta: LinkMeta | null;
@@ -93,10 +101,12 @@ const Ctx = createContext<AnalysisContextValue | null>(null);
 export function AnalysisProvider({ children }: { children: ReactNode }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [file, setFile] = useState<File | null>(null);
+  const [segment, setSegment] = useState<VideoSegment | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [sourceMeta, setSourceMeta] = useState<LinkMeta | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewStart, setPreviewStart] = useState(0);
   const [metadata, setMetadata] = useState<VideoMetadata>(EMPTY_METADATA);
   const [preprocessStep, setPreprocessStep] = useState(0);
   const [progress, setProgress] = useState(0);
@@ -109,6 +119,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   // the preview clip's blob, kept so a link analysis has something to store as
   // its history video -- there is no local file to fall back on
   const previewBlob = useRef<Blob | null>(null);
+  const previewStartRef = useRef(0);          // where that blob starts in the source
   const metadataCleanup = useRef<(() => void) | null>(null);
   const analysisStartedAt = useRef<number>(0);
   const savedToHistory = useRef(false);
@@ -124,19 +135,22 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
 
   const dropPreview = useCallback(() => {
     previewBlob.current = null;
+    previewStartRef.current = 0;
+    setPreviewStart(0);
     setPreviewUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return null;
     });
   }, []);
 
-  const acceptFile = useCallback((accepted: File) => {
+  const loadFile = useCallback((accepted: File, part: VideoSegment | null) => {
     runId.current += 1;                 // supersede anything still in flight
     metadataCleanup.current?.();
     savedToHistory.current = false;
     backendRequestStarted.current = false;
     setAnalysisError(null);
     setFile(accepted);
+    setSegment(part);
     setSourceUrl(null);
     setSourceMeta(null);
     dropPreview();
@@ -146,7 +160,6 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     setSelectedHistory(null);
     setProgress(0);
     setPreprocessStep(0);
-    setPhase("ready");
     setVideoUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return URL.createObjectURL(accepted);
@@ -156,6 +169,18 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     );
   }, [dropPreview]);
 
+  const acceptFile = useCallback((accepted: File) => {
+    loadFile(accepted, null);
+    setPhase("ready");
+  }, [loadFile]);
+
+  /** The picker already showed the clip and its part, so no confirm step. */
+  const analyzeFile = useCallback((accepted: File, part: VideoSegment) => {
+    loadFile(accepted, part);
+    analysisStartedAt.current = performance.now();
+    setPhase("preprocessing");
+  }, [loadFile]);
+
   /** Same reset as acceptFile, but the source is a link: no File, no object
    *  URL, so the heatmap falls back to its placeholder (nothing to draw).
    *
@@ -164,7 +189,10 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
    *  but a link has none of that yet, so the confirm step would show only the
    *  URL the user just typed and ask them to click again. On failure the flow
    *  still falls back to "ready", which is where the retry lives. */
-  const analyzeUrl = useCallback((url: string) => {
+  const analyzeUrl = useCallback((
+    url: string,
+    opts: { meta?: LinkMeta | null; segment?: VideoSegment | null } = {},
+  ) => {
     const myRun = (runId.current += 1);   // this link's generation
     metadataCleanup.current?.();
     metadataCleanup.current = null;
@@ -172,6 +200,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     backendRequestStarted.current = false;
     setAnalysisError(null);
     setFile(null);
+    setSegment(opts.segment ?? null);
     setVideoUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return null;
@@ -183,34 +212,22 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     setProgress(0);
     setPreprocessStep(0);
     setSourceUrl(url);
-    setSourceMeta(null);
+    setSourceMeta(opts.meta ?? null);
     dropPreview();
     // both run in parallel with the analysis and only feed the scanning view,
     // so a failure in either must change nothing about the run
     // ONE resolve, then the preview -- chained, not parallel. Each of these is
     // a separate request to the platform, and firing them together from one
     // datacenter IP is what gets the connection reset.
-    void resolveUrlMeta(url)
+    // Already resolved by the picker, the metadata is reused, not fetched again.
+    const known = opts.meta !== undefined;
+    void (known ? Promise.resolve(opts.meta ?? null) : resolveUrlMeta(url))
       .then((m) => {
         // The user may have pasted another link while this one was resolving.
         // Writing m here would show the OLD clip's duration and resolution
         // against the new link, and would queue the old preview behind it.
         if (runId.current !== myRun) return null;
-        setSourceMeta(m);
-        // The same limit uploads are held to. The server rejects it anyway,
-        // but only after the analysis has been queued -- catching it here
-        // saves the user the wait and the backend the work.
-        if (m?.durationSec && m.durationSec > MAX_DURATION_SECONDS) {
-          setAnalysisError(
-            `That video is ${Math.round(m.durationSec)}s. Only clips up to ` +
-              `${MAX_DURATION_SECONDS}s are analysed.`,
-          );
-          backendRequestStarted.current = true;   // stop the pending request
-          setProgress(0);
-          setPreprocessStep(0);
-          setPhase("ready");
-          return null;
-        }
+        if (!known) setSourceMeta(m);
         if (m) {
           setMetadata({
             duration: m.durationSec,
@@ -220,17 +237,19 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
             codec: null,
           });
         }
-        return fetchPreviewClip(url);
+        return fetchPreviewClip(url, opts.segment?.start ?? 0);
       })
-      .then((blob) => {
-        if (!blob) return;
+      .then((clip) => {
+        if (!clip) return;
         // THE BUG this guard fixes: a preview can take tens of seconds to fetch
         // and transcode. Without it, the previous link's clip arrives after the
         // user has started a new one and is painted as the new one's video.
         // Drop the blob rather than leak an object URL for it.
         if (runId.current !== myRun) return;
-        previewBlob.current = blob;
-        setPreviewUrl(URL.createObjectURL(blob));
+        previewBlob.current = clip.blob;
+        previewStartRef.current = clip.start;
+        setPreviewStart(clip.start);
+        setPreviewUrl(URL.createObjectURL(clip.blob));
       });
     analysisStartedAt.current = performance.now();
     setPhase("preprocessing");
@@ -248,6 +267,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       return null;
     });
     setFile(null);
+    setSegment(null);
     setSourceUrl(null);
     setSourceMeta(null);
     dropPreview();
@@ -300,7 +320,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       const snapshot = { fileSize, metadata };
       // card thumbnail + history persistence
       const poster = sourceMeta?.thumbnail ?? null;
-      (url ? captureThumbnail(url) : Promise.resolve(null)).then((grabbed) => {
+      const at = res.segment ? (res.segment.start + res.segment.end) / 2 : undefined;
+      (url ? captureThumbnail(url, 192, at) : Promise.resolve(null)).then((grabbed) => {
         const thumb = grabbed ?? poster;
         setThumbnail(thumb);
         const { reportUrl: _reportUrl, ...resultSansReport } = res;
@@ -310,7 +331,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
           thumbnail: thumb,
           fileSize: snapshot.fileSize,
           metadata: snapshot.metadata,
-          result: resultSansReport,
+          // the stored clip of a link is its preview, which starts at its part
+          result: { ...resultSansReport, clipStart: file ? null : previewStartRef.current },
         };
         historyStore.addItem(item);
         setLastSavedId(item.id);
@@ -353,7 +375,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     if (!backendRequestStarted.current) {
       backendRequestStarted.current = true;
       const myRun = runId.current;      // the source this request belongs to
-      (file ? analyzeWithBackend(file) : analyzeUrlWithBackend(sourceUrl as string))
+      (file ? analyzeWithBackend(file, segment) : analyzeUrlWithBackend(sourceUrl as string, segment))
         .then((backend) => {
           // A verdict for a source the user has moved on from must not be
           // shown, scored, or written to history against the new one.
@@ -369,6 +391,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
             indicators: [],
             frames: backend.frames,
             windows: backend.windows,
+            segment: backend.segment ?? null,
+            sourceUrl: file ? null : backend.sourceUrl ?? sourceUrl,
             analyzedAt: new Date().toISOString(),
             processingMs,
             modelVersion: backend.modelVersion,
@@ -395,7 +419,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       );
       return () => clearTimeout(timer);
     }
-  }, [phase, progress, file, sourceUrl, finishAnalysis]);
+  }, [phase, progress, file, segment, sourceUrl, finishAnalysis]);
 
   // Analyzing (MOCK, default): fixed-duration animated progress, then
   // produce a mock result and persist it.
@@ -412,9 +436,9 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     savedToHistory.current = true;
 
     const processingMs = Math.round(performance.now() - analysisStartedAt.current);
-    const res = generateMockResult(file.name, metadata.duration, processingMs);
+    const res = generateMockResult(file.name, metadata.duration, processingMs, segment);
     finishAnalysis(res, file.size);
-  }, [phase, progress, file, metadata, finishAnalysis]);
+  }, [phase, progress, file, segment, metadata, finishAnalysis]);
 
   // ---- history selection & display resolution --------------------------------
 
@@ -524,6 +548,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         fileSize: file?.size ?? sourceMeta?.filesize ?? 0,
         metadata,
         selectedId: lastSavedId,
+        videoOffset: videoUrl ? 0 : previewStart,
       }
     : selectedHistory && restoredResult
       ? {
@@ -533,6 +558,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
           fileSize: selectedHistory.fileSize,
           metadata: selectedHistory.metadata,
           selectedId: selectedHistory.id,
+          videoOffset: selectedHistory.result.clipStart ?? 0,
         }
       : null;
 
@@ -552,6 +578,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     display,
     history: historyStore.items,
     acceptFile,
+    analyzeFile,
+    segment,
     startAnalysis,
     reset,
     selectHistory,

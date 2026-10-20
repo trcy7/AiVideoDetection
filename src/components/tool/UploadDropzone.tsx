@@ -1,17 +1,19 @@
 import { useCallback, useRef, useState, type DragEvent } from "react";
 import {
   ACCEPTED_EXTENSIONS,
-  MAX_DURATION_SECONDS,
-  checkVideoDuration,
+  probeVideoDuration,
   validateVideoFile,
 } from "../../utils/validateVideoFile";
+import { needsSegment } from "../../utils/segments";
 import "./UploadDropzone.css";
 
 interface UploadDropzoneProps {
   onFileAccepted: (file: File) => void;
+  /** A clip over a minute: the caller asks which minute to analyze. */
+  onLongFile: (file: File, duration: number) => void;
 }
 
-export function UploadDropzone({ onFileAccepted }: UploadDropzoneProps) {
+export function UploadDropzone({ onFileAccepted, onLongFile }: UploadDropzoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,16 +33,13 @@ export function UploadDropzone({ onFileAccepted }: UploadDropzoneProps) {
 
       setError(null);
       setChecking(true);
-      const duration = await checkVideoDuration(file);
+      const duration = await probeVideoDuration(file);
       setChecking(false);
-      if (!duration.valid) {
-        setError(duration.error ?? "This video is too long.");
-        return;
-      }
-
-      onFileAccepted(file);
+      if (inputRef.current) inputRef.current.value = "";   // same file again re-fires change
+      if (needsSegment(duration)) onLongFile(file, duration);
+      else onFileAccepted(file);
     },
-    [onFileAccepted],
+    [onFileAccepted, onLongFile],
   );
 
   const onDragEnter = (e: DragEvent<HTMLDivElement>) => {
@@ -128,7 +127,7 @@ export function UploadDropzone({ onFileAccepted }: UploadDropzoneProps) {
           <span className="dropzone__chip">
             {ACCEPTED_EXTENSIONS.map((ext) => ext.slice(1)).join(" · ")}
           </span>
-          <span className="dropzone__chip">max {MAX_DURATION_SECONDS}s</span>
+          <span className="dropzone__chip">1 min per analysis</span>
         </p>
       </div>
 

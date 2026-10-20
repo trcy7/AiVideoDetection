@@ -24,11 +24,11 @@ const FAQS: Array<{ q: string; a: string }> = [
   },
   {
     q: "Which links are supported?",
-    a: "YouTube, TikTok and Facebook links to publicly accessible videos, up to 60 seconds. Instagram is not supported because its posts require an authenticated session. Links to images, audio or private videos are rejected.",
+    a: "YouTube, TikTok and Facebook links to publicly accessible videos. For a video longer than a minute you choose the minute to analyze, and only that minute is downloaded. Instagram is not supported because its posts require an authenticated session. Links to images, audio or private videos are rejected.",
   },
   {
     q: "What video formats and sizes are supported?",
-    a: "MP4, MOV, WebM, MKV and AVI, up to 500 MB and 60 seconds. Heavily compressed or very low-resolution clips are accepted, but confidence falls as compression removes the artifacts the model depends on.",
+    a: "MP4, MOV, WebM, MKV and AVI, up to 500 MB. A clip longer than a minute is split into one-minute parts and you choose the part to analyze. Heavily compressed or very low-resolution clips are accepted, but confidence falls as compression removes the artifacts the model depends on.",
   },
 ];
 

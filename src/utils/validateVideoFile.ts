@@ -1,4 +1,3 @@
-export const MAX_DURATION_SECONDS = 60; // 1 minute — the user-facing limit
 export const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024; // silent backstop only
 
 export const ACCEPTED_MIME_TYPES = [
@@ -71,29 +70,34 @@ export function validateVideoFile(file: File): ValidationResult {
   return { valid: true };
 }
 
-/** Async: reject clips longer than 1 minute. Reads only metadata. If the
- *  browser can't decode it, we allow it through (the server validates too). */
-export function checkVideoDuration(file: File): Promise<ValidationResult> {
+/** Async: the clip's length in seconds, reading only metadata. Null when the
+ *  browser can't decode it; the server still caps what it scores. */
+export function probeVideoDuration(file: File): Promise<number | null> {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file);
     const video = document.createElement("video");
     video.preload = "metadata";
-    const done = (result: ValidationResult) => {
+    video.muted = true;
+    let settled = false;
+    const done = (d: number | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      video.removeAttribute("src");
+      video.load();
       URL.revokeObjectURL(url);
-      resolve(result);
+      resolve(d !== null && Number.isFinite(d) && d > 0 ? d : null);
     };
+    const timer = setTimeout(() => done(null), 8000);
     video.onloadedmetadata = () => {
-      const d = video.duration;
-      if (Number.isFinite(d) && d > MAX_DURATION_SECONDS) {
-        done({
-          valid: false,
-          error: `Video exceeds the ${MAX_DURATION_SECONDS}-second limit (${Math.round(d)}s).`,
-        });
-      } else {
-        done({ valid: true });
-      }
+      if (Number.isFinite(video.duration)) return done(video.duration);
+      // recorder WebM reports Infinity until its end is read; seeking far forces it
+      video.ondurationchange = () => {
+        if (Number.isFinite(video.duration)) done(video.duration);
+      };
+      video.currentTime = 1e101;
     };
-    video.onerror = () => done({ valid: true });
+    video.onerror = () => done(null);
     video.src = url;
   });
 }

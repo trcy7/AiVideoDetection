@@ -316,6 +316,19 @@
   color: var(--color-text-muted);
 }
 
+/* analyzed part of a long clip */
+.hcard__part {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--color-text-muted);
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 .hcard__delete {
   position: absolute;
   top: 6px;

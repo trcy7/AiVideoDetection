@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useAnalysis } from "../context/AnalysisContext";
+import { formatSpan, keepInside } from "../utils/segments";
 import { ResultsView } from "../components/tool/ResultsView";
 import { HistoryPanel } from "../components/tool/HistoryPanel";
 import {
@@ -37,6 +38,7 @@ export function ResultsPage() {
               <p className="rpage__subtitle rpage__filename">
                 {a.file ? a.file.name : a.sourceMeta?.title ?? a.sourceUrl}
               </p>
+              {a.segment && <p className="rpage__byline">Analyzing part {formatSpan(a.segment)}</p>}
               {!a.file && a.sourceMeta?.uploader && (
                 <p className="rpage__byline">
                   {a.sourceMeta.uploader}
@@ -56,6 +58,10 @@ export function ResultsPage() {
                     muted
                     playsInline
                     aria-hidden="true"
+                    onLoadedMetadata={(e) => {
+                      if (a.segment) e.currentTarget.currentTime = a.segment.start;
+                    }}
+                    onTimeUpdate={(e) => keepInside(e.currentTarget, a.segment)}
                   />
                 ) : a.previewUrl ? (
                   <video
@@ -103,6 +109,7 @@ export function ResultsPage() {
             <ResultsView
               result={a.display.result}
               videoUrl={a.display.videoUrl}
+              videoOffset={a.display.videoOffset}
               thumbnail={a.display.thumbnail}
               metadata={a.display.metadata}
               history={a.history}

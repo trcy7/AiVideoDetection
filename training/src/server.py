@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import ipaddress
+import math
 import os
 import shutil
 import socket
@@ -20,10 +21,10 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 
-from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from . import db
@@ -43,6 +44,7 @@ app.add_middleware(
     allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
+    expose_headers=["X-Clip-Start"],     # where a preview clip starts in its source
 )
 
 # Each analysis holds the GPU for tens of seconds, so a public URL is someone
@@ -206,30 +208,82 @@ _TONEMAP = ("zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,"
             "tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p")
 
 
-def _normalize_upload(path: Path) -> Path:
-    """Tonemap HDR (PQ/HLG) uploads to SDR via ffmpeg if available; else pass through."""
+def _normalize_upload(path: Path, span: Optional[tuple[float, float]] = None) -> tuple[Path, bool]:
+    """Tonemap HDR (PQ/HLG) uploads to SDR via ffmpeg if available; else pass through.
+    With a span only that part is converted; the bool says the copy starts at span[0]."""
     import shutil as _sh
     import subprocess
 
     if _sh.which("ffmpeg") is None or _sh.which("ffprobe") is None:
-        return path
+        return path, False
     try:
         probe = subprocess.run(
             ["ffprobe", "-v", "error", "-select_streams", "v:0",
              "-show_entries", "stream=color_transfer", "-of", "default=nw=1:nk=1", str(path)],
             capture_output=True, text=True, timeout=30).stdout.lower()
         if not any(t in probe for t in ("smpte2084", "arib-std-b67")):
-            return path  # SDR -> nothing to do
+            return path, False  # SDR -> nothing to do
         dst = path.with_suffix(".sdr.mp4")
+        cut = ["-ss", f"{span[0]:.3f}", "-t", f"{span[1] - span[0]:.3f}"] if span else []
         subprocess.run(
-            ["ffmpeg", "-y", "-v", "error", "-i", str(path), "-vf", _TONEMAP,
+            ["ffmpeg", "-y", "-v", "error", *cut, "-i", str(path), "-vf", _TONEMAP,
              "-c:v", "libx264", "-crf", "20", "-preset", "veryfast", "-an", str(dst)],
             check=True, timeout=600, capture_output=True)
         if dst.exists() and dst.stat().st_size > 10_000:
-            return dst
+            return dst, span is not None
     except Exception:
         pass
-    return path
+    return path, False
+
+
+def _probe_duration(path: Path) -> Optional[float]:
+    """Container duration in seconds (ffprobe, else OpenCV); None if unknown."""
+    import subprocess
+
+    if shutil.which("ffprobe"):
+        try:
+            out = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                 "-of", "default=nw=1:nk=1", str(path)],
+                capture_output=True, text=True, timeout=30).stdout.strip()
+            d = float(out)
+            if math.isfinite(d) and d > 0:
+                return d
+        except Exception:
+            pass
+    import cv2
+
+    cap = cv2.VideoCapture(str(path))
+    try:
+        fps, n = cap.get(cv2.CAP_PROP_FPS) or 0.0, cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0.0
+    finally:
+        cap.release()
+    return n / fps if fps > 0 and n > 0 else None
+
+
+def _segment(start: Optional[float], duration: Optional[float],
+             source: Optional[float]) -> Optional[tuple[float, float]]:
+    """Span of an upload to score; None scores the whole file. A long file sent
+    without a span (an older client) gets its first minute."""
+    if any(v is not None and not math.isfinite(v) for v in (start, duration)):
+        raise HTTPException(422, "start and duration must be finite numbers.")
+    if start is None and duration is None and (source is None or source <= MAX_SEGMENT_SECONDS):
+        return None
+    begin = start or 0.0
+    length = min(duration or MAX_SEGMENT_SECONDS, MAX_SEGMENT_SECONDS)
+    if source is None:
+        return begin, begin + length
+    if begin >= source:
+        raise HTTPException(422, f"start {begin:.1f}s is past the end of the video ({source:.1f}s).")
+    return begin, min(begin + length, source)
+
+
+def _shift_times(result: dict, offset: float) -> None:
+    """Re-base frame and window times of a trimmed copy onto the original file."""
+    for f in result.get("frames", []):
+        f["time"] = round(f["time"] + offset, 3)
+    for w in result.get("windows", []):
+        w["time"] = round(w["time"] + offset, 2)
 
 
 def _model_version_label(checkpoint_path: Path) -> str:
@@ -255,7 +309,8 @@ def health() -> dict:
             "camWindows": icfg.get("max_cam_windows")}
 
 
-MAX_URL_SECONDS = 60          # only the first minute is fetched and scored
+MAX_URL_SECONDS = 60          # a link with no chosen part is scored on its first minute
+MAX_SEGMENT_SECONDS = 60      # longest span of an upload scored per request
 PREVIEW_SECONDS = 15
 # This clip is no longer decoration. The results panel plays it with controls
 # and the history row replays it, so for a link it is the only video the user
@@ -268,23 +323,32 @@ PREVIEW_MAX_BYTES = 12_000_000
 MAX_URL_BYTES = 200_000_000
 
 
-def _analyze_path(path: Path, file_hash: str) -> dict:
-    """Score one local file. Shared by /analyze and /analyze-url."""
+def _analyze_path(path: Path, file_hash: str, span: Optional[tuple[float, float]] = None,
+                  file_name: Optional[str] = None, offset: float = 0.0) -> dict:
+    """Score one local file, or the span of it. Shared by /analyze and /analyze-url.
+    offset: where the file starts in its source (a downloaded part of a link)."""
     predictor: Optional[Predictor] = _state["predictor"]
     if predictor is None:
         raise HTTPException(500, "No model loaded. The server was started without --checkpoint.")
 
-    analyze_path = _normalize_upload(path)       # HDR -> SDR when ffmpeg is present
+    analyze_path, trimmed = _normalize_upload(path, span)   # HDR -> SDR when ffmpeg is present
+    rng = span if span and not trimmed else (None, None)
     started = time.perf_counter()
     try:
         with _infer_lock:
-            result = predictor.predict(analyze_path)  # resident; no per-request reload
+            result = predictor.predict(analyze_path, *rng)  # resident; no per-request reload
     except ValueError as e:
         raise HTTPException(422, f"Video could not be decoded: {e}")
     finally:
         if analyze_path != path:
             analyze_path.unlink(missing_ok=True)
 
+    if trimmed:
+        _shift_times(result, span[0])
+    if offset:
+        _shift_times(result, offset)
+    if file_name:
+        result["fileName"] = file_name
     result["modelVersion"] = _state["model_version"]
     processing_ms = int((time.perf_counter() - started) * 1000)
     # audit trail; analysisId lets the client attach ground-truth feedback later
@@ -323,9 +387,11 @@ def _reject_internal_host(url: str) -> None:
             raise HTTPException(422, "Host is not publicly routable.")
 
 
-def _download_clip(url: str) -> tuple[Path, Path, str, bool]:
-    """Fetch the first MAX_URL_SECONDS of a public video link via yt-dlp.
-    Returns (tempdir, file, title) -- the caller removes the tempdir."""
+def _download_clip(url: str, start: Optional[float] = None, duration: Optional[float] = None):
+    """Fetch the chosen part of a public video link via yt-dlp (default: the
+    first MAX_URL_SECONDS). Returns (tempdir, file, title, cut, span, source):
+    cut means the file IS the part, starting at span[0]; otherwise it is the
+    whole video and span must be read from it. The caller removes the tempdir."""
     try:
         import yt_dlp
     except ImportError:
@@ -333,12 +399,26 @@ def _download_clip(url: str) -> tuple[Path, Path, str, bool]:
 
     _reject_non_video_url(url)
     _reject_internal_host(url)
+    _segment(start, duration, None)              # reject non-finite input before any download
     tmpdir = Path(tempfile.mkdtemp(prefix="ecnet_url_"))
-    # Uploads are rejected above a minute, so links must be too. Trimming them
-    # instead would mean a 10-minute video silently judged on its first minute,
-    # and the same file refused outright if dragged in. match_filter rejects
-    # during extraction, so an over-length clip is never downloaded.
-    over_length: list[str] = []
+    plan: dict = {}
+
+    def part(source):
+        """The span to score: the chosen part, else the first minute, else all of it."""
+        span = _segment(start, duration, source)
+        return span or (0.0, float(source) if source else float(MAX_URL_SECONDS))
+
+    def sections(info, ydl):
+        # yt-dlp asks once the length is known, so only the part is downloaded
+        src = info.get("duration")
+        plan["source"] = float(src) if isinstance(src, (int, float)) and src > 0 else None
+        try:
+            plan["span"] = part(plan["source"])
+        except HTTPException as e:               # start past the end: fetch nothing
+            plan["error"] = e
+            return
+        yield {"start_time": plan["span"][0], "end_time": plan["span"][1]}
+
     opts = {
         # Video-only by preference: the model never looks at audio, so this
         # avoids a merge step and halves the download. YouTube serves DASH
@@ -354,19 +434,17 @@ def _download_clip(url: str) -> tuple[Path, Path, str, bool]:
         "noprogress": True,
         "max_filesize": MAX_URL_BYTES,
         "socket_timeout": 30,
-        "match_filter": yt_dlp.utils.match_filter_func(
-            f"duration <= {MAX_URL_SECONDS}"),
+        "match_filter": yt_dlp.utils.match_filter_func("!is_live"),
         # yt-dlp reports a filtered-out video through this hook, not an
         # exception, so capture the reason rather than inferring it from silence
         "progress_hooks": [],
     }
-    # Section download is an ffmpeg feature. Without it we still cap bytes, but
-    # the whole clip gets scored rather than just the first minute -- say so in
-    # the response instead of pretending the limit held.
-    trimmed = shutil.which("ffmpeg") is not None
-    if trimmed:
-        opts["download_ranges"] = yt_dlp.utils.download_range_func(
-            None, [(0, MAX_URL_SECONDS)])
+    # Section download is an ffmpeg feature: the cut is re-encoded at its edges
+    # so it starts exactly at span[0]. Without ffmpeg the whole video arrives
+    # (bytes still capped) and only the span is read from it.
+    cut = shutil.which("ffmpeg") is not None
+    if cut:
+        opts["download_ranges"] = sections
         opts["force_keyframes_at_cuts"] = True
     try:
         # claimed BEFORE the lock, so a preview arriving while this one is
@@ -376,22 +454,26 @@ def _download_clip(url: str) -> tuple[Path, Path, str, bool]:
     except Exception as e:
         shutil.rmtree(tmpdir, ignore_errors=True)
         msg = str(e)
-        if "does not pass filter" in msg or "duration" in msg.lower():
-            raise HTTPException(
-                422, f"Video exceeds the {MAX_URL_SECONDS}-second limit.")
+        if "does not pass filter" in msg or "is_live" in msg:
+            raise HTTPException(422, "Live streams are not supported. Provide a recorded video link.")
         # yt-dlp messages name the real cause (private, geo-blocked, login wall)
         raise HTTPException(422, f"Unable to fetch link: {msg[:200]}")
 
     info = info or {}
-
-    # Check duration FIRST. match_filter stops the download but still returns
-    # info, so any later check -- "no files", "no video stream" -- fires on an
-    # over-length clip and reports the wrong reason.
-    dur = info.get("duration")
-    if isinstance(dur, (int, float)) and dur > MAX_URL_SECONDS:
+    if info.get("is_live"):
         shutil.rmtree(tmpdir, ignore_errors=True)
-        raise HTTPException(
-            422, f"Video exceeds the {MAX_URL_SECONDS}-second limit ({int(dur)}s).")
+        raise HTTPException(422, "Live streams are not supported. Provide a recorded video link.")
+    if "error" in plan:                          # checked before "no files": nothing was fetched on purpose
+        shutil.rmtree(tmpdir, ignore_errors=True)
+        raise plan["error"]
+    if "span" not in plan:                       # no ffmpeg: the whole video came down
+        src = info.get("duration")
+        plan["source"] = float(src) if isinstance(src, (int, float)) and src > 0 else None
+        try:
+            plan["span"] = part(plan["source"])
+        except HTTPException:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+            raise
 
     # yt-dlp happily resolves image posts and audio-only media; the model needs
     # frames. Checked against the formats list, which survives a filtered run.
@@ -405,13 +487,18 @@ def _download_clip(url: str) -> tuple[Path, Path, str, bool]:
     files = [f for f in tmpdir.iterdir() if f.is_file() and f.stat().st_size > 10_000]
     if not files:
         shutil.rmtree(tmpdir, ignore_errors=True)
+        if not cut:                              # max_filesize aborts silently
+            raise HTTPException(422, f"No video under {MAX_URL_BYTES // 1_000_000} MB at this link (this "
+                                     "server has no ffmpeg, so it must download the whole video).")
         raise HTTPException(422, "No downloadable video found at this link.")
     title = (info or {}).get("title") or "link"
-    return tmpdir, max(files, key=lambda f: f.stat().st_size), title, trimmed
+    return tmpdir, max(files, key=lambda f: f.stat().st_size), title, cut, plan["span"], plan["source"]
 
 
 class AnalyzeUrlIn(BaseModel):
     url: str
+    start: Optional[float] = Field(None, ge=0)          # chosen part of a long video, seconds
+    duration: Optional[float] = Field(None, gt=0)
 
 
 @app.post("/resolve-url", dependencies=[Depends(_fetch_limit)])
@@ -538,10 +625,11 @@ def preview_url(body: AnalyzeUrlIn) -> Response:
             "noplaylist": True, "quiet": True, "no_warnings": True,
             "noprogress": True, "socket_timeout": 20,
         }
+        p0 = body.start if body.start is not None and math.isfinite(body.start) else 0.0
         if has_ffmpeg:
-            # a few seconds is small whatever the clip's length
+            # a few seconds of the chosen part, small whatever the clip's length
             opts["download_ranges"] = yt_dlp.utils.download_range_func(
-                None, [(0, PREVIEW_SECONDS)])
+                None, [(p0, p0 + PREVIEW_SECONDS)])
             opts["force_keyframes_at_cuts"] = True
         else:
             # cannot trim, so the WHOLE file would arrive -- refuse the big ones.
@@ -562,7 +650,8 @@ def preview_url(body: AnalyzeUrlIn) -> Response:
         return Response(
             best.read_bytes(),
             media_type="video/mp4",
-            headers={"Cache-Control": "no-store"},
+            # untrimmed (no ffmpeg) previews start at the video's beginning
+            headers={"Cache-Control": "no-store", "X-Clip-Start": f"{p0 if has_ffmpeg else 0.0:.3f}"},
         )
     except Exception:
         return Response(status_code=204)     # never surface preview failures
@@ -573,33 +662,51 @@ def preview_url(body: AnalyzeUrlIn) -> Response:
 @app.post("/analyze-url", dependencies=[Depends(_rate_limit)])
 def analyze_url(body: AnalyzeUrlIn) -> dict:
     """Analyze a public video link (YouTube/TikTok/Instagram/Facebook/direct).
-    Only the first minute is fetched; the file is deleted after scoring."""
-    tmpdir, path, title, trimmed = _download_clip(body.url.strip())
+    start/duration pick the part of a longer video (default: its first minute);
+    only that part is fetched, and the file is deleted after scoring."""
+    url = body.url.strip()
+    tmpdir, path, title, cut, span, source = _download_clip(url, body.start, body.duration)
     try:
         file_hash = hashlib.sha256(path.read_bytes()).hexdigest()
-        result = _analyze_path(path, file_hash)
-        result["fileName"] = f"{title[:80]}{path.suffix}"
-        result["sourceUrl"] = body.url.strip()
-        result["truncatedToSeconds"] = MAX_URL_SECONDS if trimmed else None
+        name = f"{title[:80]}{path.suffix}"
+        result = (_analyze_path(path, file_hash, None, name, offset=span[0]) if cut
+                  else _analyze_path(path, file_hash, span, name))
+        result["sourceUrl"] = url
+        partial = source is None or span[1] - span[0] < source - 1e-3
+        result["truncatedToSeconds"] = round(span[1] - span[0], 3) if partial else None
+        if source is not None or body.start is not None or body.duration is not None:
+            result["segment"] = {"start": round(span[0], 3), "end": round(span[1], 3),
+                                 "sourceDuration": round(source, 3) if source else None}
         return result
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)   # the download never persists
 
 
 @app.post("/analyze", dependencies=[Depends(_rate_limit)])
-async def analyze(video: UploadFile = File(...)) -> dict:
+async def analyze(video: UploadFile = File(...),
+                  start: Optional[float] = Form(None, ge=0),
+                  duration: Optional[float] = Form(None, gt=0)) -> dict:
+    """Score an upload. start/duration (seconds) pick the part of a long file
+    to score; result times stay relative to the whole file."""
     raw = await video.read()
     # identify a repeat upload without ever storing the video itself
     file_hash = hashlib.sha256(raw).hexdigest()
 
-    suffix = Path(video.filename or "upload.mp4").suffix or ".mp4"
+    name = Path(video.filename or "upload.mp4").name
+    suffix = Path(name).suffix or ".mp4"
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(raw)
         tmp_path = Path(tmp.name)
     try:
+        source = await run_in_threadpool(_probe_duration, tmp_path)
+        span = _segment(start, duration, source)
         # predict() blocks for tens of seconds. On the event loop that freezes
         # every other request, /health included -- so hand it to a worker.
-        return await run_in_threadpool(_analyze_path, tmp_path, file_hash)
+        result = await run_in_threadpool(_analyze_path, tmp_path, file_hash, span, name)
+        if span:
+            result["segment"] = {"start": round(span[0], 3), "end": round(span[1], 3),
+                                 "sourceDuration": round(source, 3) if source else None}
+        return result
     finally:
         tmp_path.unlink(missing_ok=True)            # the upload never persists
 

@@ -85,19 +85,22 @@ def load_checkpoint(path: str | Path, map_location: Any = "cpu") -> dict[str, An
 
 
 def read_video_frames(
-    video_path: str | Path, n_frames: int
+    video_path: str | Path, n_frames: int,
+    start_sec: Optional[float] = None, end_sec: Optional[float] = None,
 ) -> list[tuple[int, float, np.ndarray]]:
-    """Uniformly sample up to `n_frames` RGB frames from a video.
+    """Uniformly sample up to `n_frames` RGB frames from a video, or from the
+    start_sec..end_sec span of it (indices and times stay absolute).
 
     Returns [(frame_index, time_sec, rgb_array), ...]. Tries decord (fast)
     and falls back to OpenCV. Raises ValueError if the file can't be decoded.
     """
     video_path = str(video_path)
+    span = (start_sec, end_sec)
     try:
-        return _read_with_decord(video_path, n_frames)
+        return _read_with_decord(video_path, n_frames, span)
     except ImportError:
         pass
-    return _read_with_opencv(video_path, n_frames)
+    return _read_with_opencv(video_path, n_frames, span)
 
 
 def _uniform_indices(total: int, n: int) -> list[int]:
@@ -107,27 +110,29 @@ def _uniform_indices(total: int, n: int) -> list[int]:
     return sorted({int(round(i)) for i in np.linspace(0, total - 1, n)})
 
 
-def _read_with_decord(path: str, n_frames: int) -> list[tuple[int, float, np.ndarray]]:
+def _read_with_decord(path: str, n_frames: int, span=None) -> list[tuple[int, float, np.ndarray]]:
     import decord  # noqa: F401  (optional dependency)
 
     reader = decord.VideoReader(path)
     total = len(reader)
     fps = float(reader.get_avg_fps()) or 30.0
-    indices = _uniform_indices(total, n_frames)
+    lo, hi = _frame_span(total, fps, span)
+    indices = [lo + i for i in _uniform_indices(hi - lo, n_frames)]
     if not indices:
         raise ValueError(f"No frames in video: {path}")
     batch = reader.get_batch(indices).asnumpy()  # already RGB
     return [(idx, idx / fps, frame) for idx, frame in zip(indices, batch)]
 
 
-def _read_with_opencv(path: str, n_frames: int) -> list[tuple[int, float, np.ndarray]]:
+def _read_with_opencv(path: str, n_frames: int, span=None) -> list[tuple[int, float, np.ndarray]]:
     cap = cv2.VideoCapture(path)
     if not cap.isOpened():
         raise ValueError(f"Cannot open video: {path}")
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    lo, hi = _frame_span(total, fps, span)
     frames: list[tuple[int, float, np.ndarray]] = []
-    for idx in _uniform_indices(total, n_frames):
+    for idx in (lo + i for i in _uniform_indices(hi - lo, n_frames)):
         cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
         ok, bgr = cap.read()
         if not ok:
@@ -305,28 +310,49 @@ def read_video_windows(
     fallback_stride: int = 2,
     cover: bool = False,
     max_windows: int = 48,
+    start_sec: Optional[float] = None,
+    end_sec: Optional[float] = None,
 ) -> list[list[tuple[int, float, np.ndarray]]]:
     """Read CONTIGUOUS windows of window_len RGB frames for the hybrid's temporal
     branch, in-window stride TIME-NORMALIZED to target_fps (see stride_for_fps).
     cover=True tiles the WHOLE clip (up to max_windows); else samples n_windows
-    spread across it. Returns [[(frame_index, time_sec, rgb), ...], ...]. decord,
-    then OpenCV fallback. Raises ValueError if the file can't be decoded."""
+    spread across it. start_sec/end_sec restrict sampling to that span of the
+    original file; frame indices and times stay absolute. Returns
+    [[(frame_index, time_sec, rgb), ...], ...]. decord, then OpenCV fallback.
+    Raises ValueError if the file can't be decoded."""
     video_path = str(video_path)
+    span = (start_sec, end_sec)
     try:
-        return _windows_with_decord(video_path, window_len, n_windows, target_fps, fallback_stride, cover, max_windows)
+        return _windows_with_decord(video_path, window_len, n_windows, target_fps, fallback_stride, cover,
+                                    max_windows, span)
     except ImportError:
         pass
-    return _windows_with_opencv(video_path, window_len, n_windows, target_fps, fallback_stride, cover, max_windows)
+    return _windows_with_opencv(video_path, window_len, n_windows, target_fps, fallback_stride, cover,
+                                max_windows, span)
 
 
-def _windows_with_decord(path, window_len, n_windows, target_fps, fallback_stride, cover=False, max_windows=48):
+def _frame_span(total: int, fps: float, span) -> tuple[int, int]:
+    """[lo, hi) frame indices for a (start_sec, end_sec) span; the whole clip when unset."""
+    start_sec, end_sec = span or (None, None)
+    lo = 0 if start_sec is None else max(0, int(round(start_sec * fps)))
+    hi = total if end_sec is None else min(total, int(round(end_sec * fps)))
+    return min(lo, total), max(min(lo, total), hi)
+
+
+def _shift(plans: list[list[int]], lo: int) -> list[list[int]]:
+    return [[i + lo for i in w] for w in plans] if lo else plans
+
+
+def _windows_with_decord(path, window_len, n_windows, target_fps, fallback_stride, cover=False, max_windows=48,
+                         span=None):
     import decord  # noqa: F401  (optional dependency)
 
     reader = decord.VideoReader(path)
     total = len(reader)
     fps = float(reader.get_avg_fps()) or 30.0
     stride = stride_for_fps(fps, target_fps, fallback_stride)
-    plans = _plan(total, window_len, n_windows, stride, cover, max_windows)
+    lo, hi = _frame_span(total, fps, span)
+    plans = _shift(_plan(hi - lo, window_len, n_windows, stride, cover, max_windows), lo)
     if not plans:
         raise ValueError(f"No frames in video: {path}")
     flat = sorted({i for w in plans for i in w})          # decode each needed frame once
@@ -335,22 +361,43 @@ def _windows_with_decord(path, window_len, n_windows, target_fps, fallback_strid
     return [[(i, i / fps, lut[i]) for i in w] for w in plans]
 
 
-def _windows_with_opencv(path, window_len, n_windows, target_fps, fallback_stride, cover=False, max_windows=48):
+SEEK_GAP = 250   # frames; a nearer target is decoded forward, a farther one is sought
+
+
+def _decode_frames(cap, need: list[int]) -> dict[int, np.ndarray]:
+    """RGB frames at the sorted indices `need`. A seek decodes from the previous
+    keyframe, so seeking to every frame re-decoded the same stretch hundreds of
+    times; reading forward between nearby targets gives the same pixels far faster."""
+    lut: dict[int, np.ndarray] = {}
+    pos = None                                   # index the next grab() returns
+    for target in need:
+        if pos is None or target < pos or target - pos > SEEK_GAP:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, target)
+            pos = target
+        while pos < target and cap.grab():
+            pos += 1
+        if pos != target:                        # ran out of frames
+            break
+        ok, bgr = cap.read()
+        if not ok:
+            pos = None                           # unreadable frame: seek afresh
+            continue
+        lut[target] = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+        pos = target + 1
+    return lut
+
+
+def _windows_with_opencv(path, window_len, n_windows, target_fps, fallback_stride, cover=False, max_windows=48,
+                         span=None):
     cap = cv2.VideoCapture(path)
     if not cap.isOpened():
         raise ValueError(f"Cannot open video: {path}")
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     stride = stride_for_fps(fps, target_fps, fallback_stride)
-    plans = _plan(total, window_len, n_windows, stride, cover, max_windows)
-    lut: dict[int, np.ndarray] = {}
-    if plans:
-        flat = sorted({i for w in plans for i in w})
-        for idx in flat:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
-            ok, bgr = cap.read()
-            if ok:
-                lut[idx] = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+    lo, hi = _frame_span(total, fps, span)
+    plans = _shift(_plan(hi - lo, window_len, n_windows, stride, cover, max_windows), lo)
+    lut = _decode_frames(cap, sorted({i for w in plans for i in w})) if plans else {}
     cap.release()
     # keep only COMPLETE windows so the ConvLSTM always gets a fixed length
     windows = [[(i, i / fps, lut[i]) for i in w] for w in plans if all(i in lut for i in w)]
@@ -360,31 +407,43 @@ def _windows_with_opencv(path, window_len, n_windows, target_fps, fallback_strid
     # phone clips): CAP_PROP_FRAME_COUNT reads 0 and cap.set(POS_FRAMES) lands
     # nowhere, so nothing decodes. Fall back to SEQUENTIAL decode, which never
     # relies on the broken seek index.
-    return _windows_sequential(path, window_len, n_windows, target_fps, fallback_stride, cover, max_windows)
+    return _windows_sequential(path, window_len, n_windows, target_fps, fallback_stride, cover, max_windows,
+                               span=span)
 
 
 def _windows_sequential(path, window_len, n_windows, target_fps, fallback_stride,
-                        cover=False, max_windows=48, max_frames: int = 12000):
+                        cover=False, max_windows=48, max_frames: int = 12000, span=None):
     """Decode frames in order (no seeking) and build windows from what actually
-    came out. Robust for containers OpenCV can't seek (WebM/VP9). Capped at
-    max_frames so a very long clip can't exhaust memory."""
+    came out. Robust for containers OpenCV can't seek (WebM/VP9). Frames before
+    the span are skipped without colour conversion; at most max_frames are kept
+    so a very long clip can't exhaust memory."""
     cap = cv2.VideoCapture(path)
     if not cap.isOpened():
         raise ValueError(f"Cannot open video: {path}")
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    start_sec, end_sec = span or (None, None)
+    lo = 0 if start_sec is None else max(0, int(round(start_sec * fps)))
+    hi = None if end_sec is None else int(round(end_sec * fps))
     frames: list[np.ndarray] = []
-    while len(frames) < max_frames:
+    idx = 0
+    while len(frames) < max_frames and (hi is None or idx < hi):
+        if idx < lo:
+            if not cap.grab():
+                break
+            idx += 1
+            continue
         ok, bgr = cap.read()
         if not ok:
             break
         frames.append(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))
+        idx += 1
     cap.release()
     total = len(frames)
     if total == 0:
         raise ValueError(f"Could not decode any frames from: {path}")
     stride = stride_for_fps(fps, target_fps, fallback_stride)
     plans = _plan(total, window_len, n_windows, stride, cover, max_windows)
-    windows = [[(i, i / fps, frames[i]) for i in w] for w in plans if all(i < total for i in w)]
+    windows = [[(lo + i, (lo + i) / fps, frames[i]) for i in w] for w in plans if all(i < total for i in w)]
     if not windows:
         raise ValueError(
             f"Only {total} frame(s) decoded from {path} -- too short for a "

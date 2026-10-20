@@ -6,9 +6,11 @@ import type {
   Indicator,
   ReportFrame,
   Verdict,
+  VideoSegment,
 } from "../types";
 import { cleanModelVersion } from "../utils/realBackend";
 import { DEFAULT_BANDS, verdictFor } from "../utils/bands";
+import { isPartial, segmentLabel } from "../utils/segments";
 
 export const FRAME_COUNT = 32;
 export const MODEL_VERSION = "ECNet-7";
@@ -52,9 +54,10 @@ function branchScoresFor(fakeScore: number): BranchScores {
  * Suspicious-region boxes that drift smoothly frame to frame, roughly
  * where a face would be, so scrubbing feels like real tracked detections.
  */
-function buildFrames(verdict: Verdict, duration: number | null): HeatmapFrame[] {
+function buildFrames(verdict: Verdict, duration: number | null, segment: VideoSegment | null): HeatmapFrame[] {
   const boxCount = verdict === "fake" ? 2 : verdict === "uncertain" ? 1 : 0;
-  const totalTime = duration && duration > 0 ? duration : FRAME_COUNT / 8;
+  const offset = segment?.start ?? 0;
+  const totalTime = segment ? segment.end - segment.start : duration && duration > 0 ? duration : FRAME_COUNT / 8;
 
   const anchors = Array.from({ length: boxCount }, (_, i) => ({
     cx: 0.35 + i * 0.28 + Math.random() * 0.08,
@@ -81,7 +84,7 @@ function buildFrames(verdict: Verdict, duration: number | null): HeatmapFrame[] 
         ),
       };
     });
-    return { index, time: t * totalTime * 0.98, boxes };
+    return { index, time: offset + t * totalTime * 0.98, boxes };
   });
 }
 
@@ -156,6 +159,7 @@ export function buildReportUrl(r: {
   modelVersion: string;
   reportFrames?: ReportFrame[];
   bands?: { realBelow: number; fakeAbove: number };
+  segment?: VideoSegment | null;
 }): string {
   const L = 56;
   const RT = 556;
@@ -251,6 +255,7 @@ export function buildReportUrl(r: {
   fill(MUT); t(L, y, 9, "SUMMARY", true); y -= 22;
   for (const [k, v] of [
     ["Confidence", `${r.confidence.toFixed(1)}%`],
+    ...(isPartial(r.segment) ? [["Part analyzed", segmentLabel(r.segment)]] : []),
     ["Model", clip(cleanModelVersion(r.modelVersion), 52)],
     ["Analyzed", when],
   ] as Array<[string, string]>) {
@@ -373,6 +378,7 @@ export function generateMockResult(
   fileName: string,
   duration: number | null,
   processingMs: number,
+  segment: VideoSegment | null = null,
 ): AnalysisResult {
   // derive the verdict back from the score, so the two agree by construction
   const fakeScore = fakeScoreFor(pickVerdict());
@@ -390,7 +396,8 @@ export function generateMockResult(
     bands: DEFAULT_BANDS,
     branchScores,
     indicators,
-    frames: buildFrames(verdict, duration),
+    frames: buildFrames(verdict, duration, segment),
+    segment,
     analyzedAt,
     processingMs,
     modelVersion: MODEL_VERSION,
@@ -404,6 +411,7 @@ export function generateMockResult(
       indicators,
       analyzedAt,
       modelVersion: MODEL_VERSION,
+      segment,
     }),
   };
 }

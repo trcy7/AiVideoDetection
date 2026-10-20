@@ -1,5 +1,6 @@
-import type { Verdict, VideoMetadata } from "../../types";
+import type { Verdict, VideoMetadata, VideoSegment } from "../../types";
 import { formatDuration } from "../../utils/videoMetadata";
+import { formatSpan, isPartial } from "../../utils/segments";
 import "./VideoPreview.css";
 
 interface VideoPreviewProps {
@@ -9,6 +10,10 @@ interface VideoPreviewProps {
   /** Live analyses have the object URL; history restores only a thumbnail. */
   videoUrl: string | null;
   thumbnail: string | null;
+  /** The analyzed part of a long clip; the player opens on it. */
+  segment?: VideoSegment | null;
+  /** Source time at second 0 of videoUrl. */
+  videoOffset?: number;
 }
 
 const VERDICT_BADGE: Record<Verdict, string> = {
@@ -25,7 +30,10 @@ export function VideoPreview({
   verdict,
   videoUrl,
   thumbnail,
+  segment,
+  videoOffset = 0,
 }: VideoPreviewProps) {
+  const part = isPartial(segment) ? segment : null;
   const meta = [
     {
       label: "Resolution",
@@ -35,6 +43,7 @@ export function VideoPreview({
       label: "Duration",
       value: metadata.duration !== null ? formatDuration(metadata.duration) : DASH,
     },
+    ...(part ? [{ label: "Analyzed", value: formatSpan(part) }] : []),
   ];
 
   return (
@@ -49,6 +58,9 @@ export function VideoPreview({
             playsInline
             preload="metadata"
             aria-label={`Preview of ${fileName}`}
+            onLoadedMetadata={(e) => {
+              if (part) e.currentTarget.currentTime = Math.max(0, part.start - videoOffset);
+            }}
           />
         ) : thumbnail ? (
           <img className="vpreview__media" src={thumbnail} alt={`Thumbnail of ${fileName}`} />

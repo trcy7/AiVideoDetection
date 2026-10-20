@@ -1,9 +1,11 @@
 /** Captures a small JPEG data-URL from a video object URL, for history cards.
- *  Seeks a quarter of the way in (first frames are often black). Resolves to
- *  null on any failure — a missing thumbnail must never break the flow. */
+ *  Seeks to `atTime`, else a quarter of the way in (first frames are often
+ *  black). Resolves to null on any failure — a missing thumbnail must never
+ *  break the flow. */
 export function captureThumbnail(
   videoUrl: string,
   maxWidth = 192,
+  atTime?: number,
 ): Promise<string | null> {
   return new Promise((resolve) => {
     const video = document.createElement("video");
@@ -24,7 +26,7 @@ export function captureThumbnail(
     });
 
     video.addEventListener("loadeddata", () => {
-      const target = Number.isFinite(video.duration) ? video.duration * 0.25 : 0;
+      const target = atTime ?? (Number.isFinite(video.duration) ? video.duration * 0.25 : 0);
       const onSeeked = () => {
         try {
           const scale = Math.min(1, maxWidth / (video.videoWidth || maxWidth));
