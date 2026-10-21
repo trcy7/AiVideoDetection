@@ -218,6 +218,8 @@ export async function analyzeWithBackend(
         `the request reached ${BACKEND_URL}, which does not accept POST. ` +
         `VITE_BACKEND_URL may be pointing at the frontend rather than the API.`;
     }
+    // 422 is a refused file ("too short", "a picture"): already a full sentence
+    if (res.status === 422 && typeof detail === "string") throw new Error(detail);
     throw new Error(`Analysis failed (${res.status}): ${detail}`);
   }
 

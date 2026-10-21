@@ -1,5 +1,6 @@
 import type { VideoSegment } from "../types";
 import type { LinkMeta } from "./realBackend";
+import { MIN_VIDEO_SECONDS } from "./validateVideoFile";
 
 /** What the picker splits: a local file, or a link known only by its metadata. */
 export type PickSource = { kind: "file"; file: File } | { kind: "link"; url: string; meta: LinkMeta };
@@ -19,10 +20,12 @@ export function needsSegment(duration: number | null): duration is number {
   return duration !== null && Number.isFinite(duration) && duration > SEGMENT_SECONDS + SLACK_SECONDS;
 }
 
-/** Back-to-back one-minute parts; the last one holds the remainder. */
+/** Back-to-back one-minute parts; the last one holds the remainder, unless
+ *  that is too short to analyze. */
 export function splitIntoSegments(duration: number): SegmentChoice[] {
   const parts: SegmentChoice[] = [];
-  for (let start = 0; start < duration - SLACK_SECONDS; start += SEGMENT_SECONDS) {
+  const tail = Math.max(SLACK_SECONDS, MIN_VIDEO_SECONDS);
+  for (let start = 0; start < duration - tail; start += SEGMENT_SECONDS) {
     parts.push({ start, end: Math.min(start + SEGMENT_SECONDS, duration) });
   }
   return parts;

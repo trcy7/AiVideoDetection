@@ -338,7 +338,8 @@ def _analyze_path(path: Path, file_hash: str, span: Optional[tuple[float, float]
         with _infer_lock:
             result = predictor.predict(analyze_path, *rng)  # resident; no per-request reload
     except ValueError as e:
-        raise HTTPException(422, f"Video could not be decoded: {e}")
+        print(f"decode failed: {e}", flush=True)        # the path stays in the log, not the reply
+        raise HTTPException(422, _UNREADABLE)
     finally:
         if analyze_path != path:
             analyze_path.unlink(missing_ok=True)
@@ -368,6 +369,113 @@ def _reject_non_video_url(url: str) -> None:
         raise HTTPException(422, "Image links are not supported. Provide a video link.")
     if path.endswith(_AUDIO_EXT):
         raise HTTPException(422, "Audio links are not supported. Provide a video link.")
+
+
+# A clip must be LONGER than this. One 16-frame window spans ~1.3 s.
+MIN_VIDEO_SECONDS = 2.0
+_UPLOAD_HINT = "Upload a video file (mp4, mov, webm, mkv or avi)."
+_UNREADABLE = ("This file has no readable video. It may be audio only, damaged, "
+               "or in a format this server cannot decode.")
+# Same box layout as an mp4, so only the brand tells these stills/audio apart.
+_IMAGE_BRANDS = {b"heic", b"heix", b"heim", b"heis", b"hevc", b"hevx", b"mif1", b"msf1",
+                 b"miaf", b"avif", b"avis", b"crx "}
+_AUDIO_BRANDS = {b"M4A ", b"M4B ", b"M4P ", b"F4A ", b"F4B "}
+
+
+def _sniff(head: bytes) -> str:
+    """video (mp4/mov, mkv/webm, avi), image, audio or other, from the first
+    16 bytes. The name proves nothing: OpenCV opens a photo renamed .mp4 and
+    the model scores it as a one-frame video."""
+    if head[4:8] == b"ftyp":
+        brand = head[8:12]
+        return "image" if brand in _IMAGE_BRANDS else "audio" if brand in _AUDIO_BRANDS else "video"
+    if head[4:8] in (b"moov", b"mdat", b"wide", b"free", b"skip", b"pnot"):   # QuickTime, no ftyp
+        return "video"
+    if head.startswith(b"\x1aE\xdf\xa3"):                                    # Matroska / WebM
+        return "video"
+    if head.startswith(b"RIFF"):
+        return {b"AVI ": "video", b"WEBP": "image", b"WAVE": "audio"}.get(head[8:12], "other")
+    if head.startswith((b"\xff\xd8\xff", b"\x89PNG", b"GIF87a", b"GIF89a", b"BM", b"II*\x00",
+                        b"MM\x00*", b"<svg")):
+        return "image"
+    if head.startswith((b"ID3", b"fLaC")) or head[:2] in (b"\xff\xfb", b"\xff\xf3", b"\xff\xf2",
+                                                         b"\xff\xf1", b"\xff\xf9"):
+        return "audio"
+    return "other"
+
+
+def _secs(s: float) -> str:
+    n = f"{s:.2f}".rstrip("0").rstrip(".")
+    return f"{n} second" if n == "1" else f"{n} seconds"
+
+
+def _too_short(seconds: float, part: bool) -> HTTPException:
+    if part:
+        return HTTPException(422, f"The part you picked is {_secs(seconds)} long. "
+                                  f"Pick a part longer than {_secs(MIN_VIDEO_SECONDS)}.")
+    return HTTPException(422, f"This video is {_secs(seconds)} long. "
+                              f"Videos must be longer than {_secs(MIN_VIDEO_SECONDS)}.")
+
+
+def _decoded_seconds(path: Path) -> float:
+    """Seconds of frames that really decode from the start, read only until the
+    minimum is passed; a container can claim a length its frames lack. Frame
+    count and timestamps are both read and the larger wins, so a misreported
+    rate (some WebM say 1000 fps) can only let a clip through, never refuse it."""
+    import cv2
+
+    cap = cv2.VideoCapture(str(path))
+    try:
+        if not cap.isOpened():
+            return 0.0
+        fps = cap.get(cv2.CAP_PROP_FPS) or 0.0
+        fps = fps if 1.0 <= fps <= 240.0 else 30.0
+        n, last = 0, 0.0
+        while n < 600 and cap.grab():
+            n += 1
+            last = max(last, (cap.get(cv2.CAP_PROP_POS_MSEC) or 0.0) / 1000.0)
+            if max(n / fps, last + 1.0 / fps) > MIN_VIDEO_SECONDS:
+                break
+        return max(n / fps, last + 1.0 / fps) if n else 0.0
+    finally:
+        cap.release()
+
+
+def _check_video(path: Path) -> None:
+    """Refuse, by content not name, what the model cannot honestly score."""
+    if path.stat().st_size == 0:
+        raise HTTPException(422, f"The file is empty. {_UPLOAD_HINT}")
+    with open(path, "rb") as f:
+        kind = _sniff(f.read(16))
+    if kind != "video":
+        lead = {"image": "This file is a picture, not a video.",
+                "audio": "This file is audio, not a video."}.get(kind, "This file is not a video.")
+        raise HTTPException(422, f"{lead} {_UPLOAD_HINT}")
+    decoded = _decoded_seconds(path)
+    if decoded == 0:
+        raise HTTPException(422, _UNREADABLE)
+    if decoded <= MIN_VIDEO_SECONDS:
+        raise _too_short(decoded, part=False)
+
+
+def _check_download(path: Path, cut: bool, span: tuple[float, float], picked: bool) -> None:
+    """The same rules for a fetched link. The reported length was checked before
+    the download; this checks what actually arrived."""
+    with open(path, "rb") as f:
+        kind = _sniff(f.read(16))
+    if kind != "video":
+        lead = {"image": "This link is a picture, not a video.",
+                "audio": "This link is audio, not a video."}.get(kind, "This link is not a video.")
+        raise HTTPException(422, f"{lead} Provide a video link.")
+    if cut or span[0] == 0:                      # frames from the start ARE the part
+        secs = _decoded_seconds(path)
+        if secs == 0:
+            raise HTTPException(422, _UNREADABLE)
+    else:                                        # a later span of the whole video
+        have = _probe_duration(path)
+        secs = (min(span[1], have) if have else span[1]) - span[0]
+    if secs <= MIN_VIDEO_SECONDS:
+        raise _too_short(secs, part=picked)
 
 
 def _reject_internal_host(url: str) -> None:
@@ -402,11 +510,18 @@ def _download_clip(url: str, start: Optional[float] = None, duration: Optional[f
     _segment(start, duration, None)              # reject non-finite input before any download
     tmpdir = Path(tempfile.mkdtemp(prefix="ecnet_url_"))
     plan: dict = {}
+    picked = start is not None or duration is not None
 
     def part(source):
         """The span to score: the chosen part, else the first minute, else all of it."""
-        span = _segment(start, duration, source)
-        return span or (0.0, float(source) if source else float(MAX_URL_SECONDS))
+        # platforms round to whole seconds: only a clearly short one is refused
+        # here; the frames that arrive settle the rest
+        if source is not None and source < MIN_VIDEO_SECONDS:
+            raise _too_short(source, part=False)
+        span = _segment(start, duration, source) or (0.0, float(source) if source else float(MAX_URL_SECONDS))
+        if picked and span[1] - span[0] <= MIN_VIDEO_SECONDS:
+            raise _too_short(span[1] - span[0], part=True)
+        return span
 
     def sections(info, ydl):
         # yt-dlp asks once the length is known, so only the part is downloaded
@@ -667,6 +782,7 @@ def analyze_url(body: AnalyzeUrlIn) -> dict:
     url = body.url.strip()
     tmpdir, path, title, cut, span, source = _download_clip(url, body.start, body.duration)
     try:
+        _check_download(path, cut, span, picked=body.start is not None or body.duration is not None)
         file_hash = hashlib.sha256(path.read_bytes()).hexdigest()
         name = f"{title[:80]}{path.suffix}"
         result = (_analyze_path(path, file_hash, None, name, offset=span[0]) if cut
@@ -699,7 +815,10 @@ async def analyze(video: UploadFile = File(...),
         tmp_path = Path(tmp.name)
     try:
         source = await run_in_threadpool(_probe_duration, tmp_path)
+        await run_in_threadpool(_check_video, tmp_path)
         span = _segment(start, duration, source)
+        if span and span[1] - span[0] <= MIN_VIDEO_SECONDS:
+            raise _too_short(span[1] - span[0], part=True)
         # predict() blocks for tens of seconds. On the event loop that freezes
         # every other request, /health included -- so hand it to a worker.
         result = await run_in_threadpool(_analyze_path, tmp_path, file_hash, span, name)

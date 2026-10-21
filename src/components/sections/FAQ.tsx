@@ -28,7 +28,7 @@ const FAQS: Array<{ q: string; a: string }> = [
   },
   {
     q: "What video formats and sizes are supported?",
-    a: "MP4, MOV, WebM, MKV and AVI, up to 500 MB. A clip longer than a minute is split into one-minute parts and you choose the part to analyze. Heavily compressed or very low-resolution clips are accepted, but confidence falls as compression removes the artifacts the model depends on.",
+    a: "MP4, MOV, WebM, MKV and AVI, up to 500 MB and longer than 2 seconds. Pictures, audio and other files are refused even when renamed to a video extension. A clip longer than a minute is split into one-minute parts and you choose the part to analyze. Heavily compressed or very low-resolution clips are accepted, but confidence falls as compression removes the artifacts the model depends on.",
   },
 ];
 

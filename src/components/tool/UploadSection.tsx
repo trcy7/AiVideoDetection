@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { USE_REAL_BACKEND, resolveUrlMeta } from "../../utils/realBackend";
 import { needsSegment, segmentLabel, type PickSource, type SegmentChoice } from "../../utils/segments";
+import { MIN_VIDEO_SECONDS, tooShortMessage } from "../../utils/validateVideoFile";
 import { useAnalysis } from "../../context/AnalysisContext";
 import { useReveal } from "../../hooks/useReveal";
 import { StatsBand } from "../StatsBand";
@@ -27,6 +28,7 @@ export function UploadSection() {
   const [link, setLink] = useState("");
   const [picking, setPicking] = useState<Picking | null>(null);
   const [checkingLink, setCheckingLink] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
 
   const inFlight = a.phase === "preprocessing" || a.phase === "analyzing";
   const part = a.segment;
@@ -58,9 +60,16 @@ export function UploadSection() {
   // A link's length decides between the picker and a direct run, so it is read
   // first; the metadata is handed on so the analysis does not fetch it again.
   const submitLink = async (v: string) => {
+    setLinkError(null);
     setCheckingLink(true);
     const meta = await resolveUrlMeta(v);
     setCheckingLink(false);
+    // platforms round to whole seconds, so only a clearly short link stops here;
+    // the server checks the frames it downloads
+    if (meta?.durationSec != null && meta.durationSec < MIN_VIDEO_SECONDS) {
+      setLinkError(tooShortMessage(meta.durationSec));
+      return;
+    }
     if (meta && needsSegment(meta.durationSec)) {
       setPicking({ source: { kind: "link", url: v, meta }, duration: meta.durationSec });
       return;
@@ -151,13 +160,19 @@ export function UploadSection() {
                               placeholder="https://..."
                               aria-label="Public video URL"
                               value={link}
-                              onChange={(e) => setLink(e.target.value)}
+                              onChange={(e) => {
+                                setLink(e.target.value);
+                                setLinkError(null);
+                              }}
                             />
                             {link && (
                               <button
                                 type="button"
                                 className="linkcard__clear"
-                                onClick={() => setLink("")}
+                                onClick={() => {
+                                  setLink("");
+                                  setLinkError(null);
+                                }}
                                 aria-label="Clear link"
                               >
                                 <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
@@ -175,6 +190,11 @@ export function UploadSection() {
                             {checkingLink ? "Checking…" : "Analyze"}
                           </button>
                         </div>
+                        {linkError && (
+                          <p className="tool__error" role="alert">
+                            {linkError}
+                          </p>
+                        )}
                       </form>
                     </>
                   )}

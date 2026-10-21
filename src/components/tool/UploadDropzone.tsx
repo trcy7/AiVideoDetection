@@ -1,7 +1,10 @@
 import { useCallback, useRef, useState, type DragEvent } from "react";
 import {
   ACCEPTED_EXTENSIONS,
+  MIN_VIDEO_SECONDS,
   probeVideoDuration,
+  sniffVideoFile,
+  tooShortMessage,
   validateVideoFile,
 } from "../../utils/validateVideoFile";
 import { needsSegment } from "../../utils/segments";
@@ -33,10 +36,14 @@ export function UploadDropzone({ onFileAccepted, onLongFile }: UploadDropzonePro
 
       setError(null);
       setChecking(true);
-      const duration = await probeVideoDuration(file);
+      const notVideo = await sniffVideoFile(file);
+      // null: the browser cannot read it (mkv/avi often); the server decides
+      const duration = notVideo ? null : await probeVideoDuration(file);
       setChecking(false);
       if (inputRef.current) inputRef.current.value = "";   // same file again re-fires change
-      if (needsSegment(duration)) onLongFile(file, duration);
+      if (notVideo) setError(notVideo);
+      else if (duration !== null && duration <= MIN_VIDEO_SECONDS) setError(tooShortMessage(duration));
+      else if (needsSegment(duration)) onLongFile(file, duration);
       else onFileAccepted(file);
     },
     [onFileAccepted, onLongFile],
@@ -127,7 +134,7 @@ export function UploadDropzone({ onFileAccepted, onLongFile }: UploadDropzonePro
           <span className="dropzone__chip">
             {ACCEPTED_EXTENSIONS.map((ext) => ext.slice(1)).join(" · ")}
           </span>
-          <span className="dropzone__chip">1 min per analysis</span>
+          <span className="dropzone__chip">over {MIN_VIDEO_SECONDS} s · 1 min per analysis</span>
         </p>
       </div>
 
