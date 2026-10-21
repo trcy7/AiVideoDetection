@@ -31,12 +31,15 @@
   flex: 1;
   min-width: 0;
   display: flex;
+  flex-wrap: wrap;                  /* size drops below the name before the name is cut short */
   align-items: baseline;
   justify-content: space-between;
-  gap: var(--space-3);
+  gap: 2px var(--space-3);
 }
 
 .metadata-panel__file-name {
+  flex: 1 1 8rem;
+  min-width: 0;
   font-weight: 600;
   font-size: var(--text-sm);
   overflow: hidden;

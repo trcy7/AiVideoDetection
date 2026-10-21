@@ -98,9 +98,8 @@
   text-underline-offset: 3px;
 }
 
-/* Accepted formats and the length cap, as two pills. They wrap as whole
-   units, so a narrow card breaks between them instead of splitting a
-   stadium-shaped pill across two lines. */
+/* Accepted formats as a pill that wraps as a whole unit, never split
+   across two lines. */
 .dropzone__hint {
   display: flex;
   flex-wrap: wrap;

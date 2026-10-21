@@ -311,7 +311,6 @@ export function SegmentPicker({ source, duration, initial, onConfirm, onCancel }
                   The whole file is uploaded and the server reads only the chosen minute from it.
                 </p>
               )}
-              {meta && <p className="segpick__desc">Only the chosen minute is downloaded from the link.</p>}
               {file ? (
                 <p className="segpick__file" title={file.name}>
                   {file.name} · {formatBytes(file.size)}

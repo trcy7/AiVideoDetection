@@ -134,7 +134,6 @@ export function UploadDropzone({ onFileAccepted, onLongFile }: UploadDropzonePro
           <span className="dropzone__chip">
             {ACCEPTED_EXTENSIONS.map((ext) => ext.slice(1)).join(" · ")}
           </span>
-          <span className="dropzone__chip">over {MIN_VIDEO_SECONDS} s · 1 min per analysis</span>
         </p>
       </div>
 

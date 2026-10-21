@@ -143,12 +143,22 @@
 }
 
 /* In-flight / complete status banner (analysis itself lives on /results) */
+/* Icon + text on one row, buttons on their own row below. The panel is never
+   wide enough for all of it on one line (~560px of content in a <=600px body),
+   and as a .glass-card it inherits overflow-wrap:anywhere, which let a flex
+   row squeeze the title to one letter per line instead of wrapping. */
 .tool__inflight {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-3) var(--space-4);
   padding: var(--space-4) var(--space-5);
-  flex-wrap: wrap;
+  overflow-wrap: break-word;
+}
+
+.tool__inflight > .tool__cta--small,
+.tool__inflight-actions {
+  grid-column: 1 / -1;
 }
 
 .tool__inflight-pulse {
@@ -208,10 +218,15 @@
   white-space: nowrap;
 }
 
+/* side by side while each button gets 9rem, stacked on the narrowest phones */
 .tool__inflight-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
   gap: var(--space-2);
-  flex-wrap: wrap;
+}
+
+.tool__inflight-actions > * {
+  width: 100%;
 }
 
 .tool__cta--small,
@@ -293,19 +308,6 @@
   }
   .tool__cta,
   .tool__ghost {
-    width: 100%;
-  }
-  .tool__inflight {
-    flex-direction: column;
-    align-items: stretch;
-    text-align: left;
-  }
-  .tool__inflight-actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-  }
-  .tool__inflight-actions .tool__cta--small,
-  .tool__inflight-actions .tool__ghost--small {
     width: 100%;
   }
 }
