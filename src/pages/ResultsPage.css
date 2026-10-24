@@ -177,6 +177,16 @@
   gap: var(--space-4);
 }
 
+.rpage__cancel {
+  align-self: flex-start;
+}
+
+@media (max-width: 560px) {
+  .rpage__cancel {
+    align-self: stretch;
+  }
+}
+
 @media (max-width: 820px) {
   .scan {
     grid-template-columns: 1fr;

@@ -71,6 +71,8 @@ interface AnalysisContextValue {
   result: AnalysisResult | null;
   /** Set when a real-backend request fails; cleared on retry/reset. */
   analysisError: string | null;
+  /** The user stopped the last run; the source stays loaded for another try. */
+  canceled: boolean;
   /** Resolved view (live result or restored history item), null if none. */
   display: ResultDisplay | null;
   history: HistoryItem[];
@@ -89,6 +91,8 @@ interface AnalysisContextValue {
   /** Object URL of a short preview clip for the scanning view; null if none. */
   previewUrl: string | null;
   startAnalysis: () => void;
+  /** Stop a run in progress: the request is aborted and any late reply ignored. */
+  cancelAnalysis: () => void;
   reset: () => void;
   selectHistory: (item: HistoryItem) => void;
   removeHistory: (id: string) => void;
@@ -115,6 +119,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const [selectedHistory, setSelectedHistory] = useState<HistoryItem | null>(null);
   const [lastSavedId, setLastSavedId] = useState<string | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [canceled, setCanceled] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   // the preview clip's blob, kept so a link analysis has something to store as
   // its history video -- there is no local file to fall back on
@@ -149,6 +155,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     savedToHistory.current = false;
     backendRequestStarted.current = false;
     setAnalysisError(null);
+    setCanceled(false);
     setFile(accepted);
     setSegment(part);
     setSourceUrl(null);
@@ -199,6 +206,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     savedToHistory.current = false;
     backendRequestStarted.current = false;
     setAnalysisError(null);
+    setCanceled(false);
     setFile(null);
     setSegment(opts.segment ?? null);
     setVideoUrl((prev) => {
@@ -257,11 +265,14 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
 
   const reset = useCallback(() => {
     runId.current += 1;                 // abandon anything still resolving
+    abortRef.current?.abort();
+    abortRef.current = null;
     metadataCleanup.current?.();
     metadataCleanup.current = null;
     savedToHistory.current = false;
     backendRequestStarted.current = false;
     setAnalysisError(null);
+    setCanceled(false);
     setVideoUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return null;
@@ -289,9 +300,25 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const startAnalysis = useCallback(() => {
     if (phase !== "ready") return;
     setAnalysisError(null);
+    setCanceled(false);
     backendRequestStarted.current = false;
     analysisStartedAt.current = performance.now();
     setPhase("preprocessing");
+  }, [phase]);
+
+  // Back to "ready" with the file or link still loaded, so it can run again.
+  // runId moves on, so a reply that still arrives is dropped, not shown or saved.
+  const cancelAnalysis = useCallback(() => {
+    if (phase !== "preprocessing" && phase !== "analyzing") return;
+    runId.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    backendRequestStarted.current = false;
+    setAnalysisError(null);
+    setProgress(0);
+    setPreprocessStep(0);
+    setCanceled(true);
+    setPhase("ready");
   }, [phase]);
 
   // Preprocessing: tick through the substeps, then hand off to analyzing.
@@ -375,7 +402,11 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     if (!backendRequestStarted.current) {
       backendRequestStarted.current = true;
       const myRun = runId.current;      // the source this request belongs to
-      (file ? analyzeWithBackend(file, segment) : analyzeUrlWithBackend(sourceUrl as string, segment))
+      const ctrl = new AbortController();
+      abortRef.current = ctrl;
+      (file
+        ? analyzeWithBackend(file, segment, ctrl.signal)
+        : analyzeUrlWithBackend(sourceUrl as string, segment, ctrl.signal))
         .then((backend) => {
           // A verdict for a source the user has moved on from must not be
           // shown, scored, or written to history against the new one.
@@ -575,12 +606,14 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     progress,
     result,
     analysisError,
+    canceled,
     display,
     history: historyStore.items,
     acceptFile,
     analyzeFile,
     segment,
     startAnalysis,
+    cancelAnalysis,
     reset,
     selectHistory,
     removeHistory,

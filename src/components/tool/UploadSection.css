@@ -142,6 +142,16 @@
   font-family: var(--font-mono);
 }
 
+/* a stopped run: news, not an error */
+.tool__notice {
+  color: var(--color-text-muted);
+  background: var(--glass-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+}
+
 /* In-flight / complete status banner (analysis itself lives on /results) */
 /* Icon + text on one row, buttons on their own row below. The panel is never
    wide enough for all of it on one line (~560px of content in a <=600px body),
@@ -156,7 +166,6 @@
   overflow-wrap: break-word;
 }
 
-.tool__inflight > .tool__cta--small,
 .tool__inflight-actions {
   grid-column: 1 / -1;
 }

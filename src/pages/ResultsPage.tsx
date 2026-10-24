@@ -99,6 +99,16 @@ export function ResultsPage() {
                   activeStep={a.phase === "preprocessing" ? a.preprocessStep : PREPROCESS_STEPS.length}
                 />
                 {a.phase === "analyzing" && <AnalyzingStatus progress={a.progress} />}
+                <button
+                  type="button"
+                  className="tool__ghost rpage__cancel"
+                  onClick={() => {
+                    a.cancelAnalysis();
+                    navigate("/#analyze");
+                  }}
+                >
+                  Cancel analysis
+                </button>
               </div>
             </div>
           </div>

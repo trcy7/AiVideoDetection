@@ -203,9 +203,13 @@ export function UploadSection() {
 
               {a.phase === "ready" && !a.file && a.sourceUrl && (
                 <>
-                  <p className="tool__error" role="alert">
-                    {a.analysisError ?? "That link could not be analyzed."}
-                  </p>
+                  {a.canceled ? (
+                    <p className="tool__notice" role="status">Analysis canceled.</p>
+                  ) : (
+                    <p className="tool__error" role="alert">
+                      {a.analysisError ?? "That link could not be analyzed."}
+                    </p>
+                  )}
                   <p className="tool__link-ready">
                     <span className="tool__link-url">{a.sourceUrl}</span>
                   </p>
@@ -232,7 +236,7 @@ export function UploadSection() {
                   )}
                   <div className="tool__actions">
                     <button type="button" className="tool__cta" onClick={runAnalysis}>
-                      Try again
+                      {a.canceled ? "Analyze again" : "Try again"}
                     </button>
                     <button type="button" className="tool__ghost" onClick={a.reset}>
                       Use a different link
@@ -246,6 +250,11 @@ export function UploadSection() {
                   {a.analysisError && (
                     <p className="tool__error" role="alert">
                       Analysis failed: {a.analysisError}
+                    </p>
+                  )}
+                  {a.canceled && (
+                    <p className="tool__notice" role="status">
+                      Analysis canceled.
                     </p>
                   )}
                   <MetadataPanel
@@ -293,13 +302,18 @@ export function UploadSection() {
                     <strong>Analysis in progress</strong>
                     <span>{a.file ? a.file.name : a.sourceUrl}</span>
                   </div>
-                  <button
-                    type="button"
-                    className="tool__cta tool__cta--small"
-                    onClick={() => navigate("/results")}
-                  >
-                    View progress
-                  </button>
+                  <div className="tool__inflight-actions">
+                    <button
+                      type="button"
+                      className="tool__cta tool__cta--small"
+                      onClick={() => navigate("/results")}
+                    >
+                      View progress
+                    </button>
+                    <button type="button" className="tool__ghost tool__ghost--small" onClick={a.cancelAnalysis}>
+                      Cancel
+                    </button>
+                  </div>
                 </div>
               )}
 

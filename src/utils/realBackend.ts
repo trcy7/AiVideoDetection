@@ -134,6 +134,7 @@ export async function fetchPreviewClip(
 export async function analyzeUrlWithBackend(
   url: string,
   segment: { start: number; end: number } | null = null,
+  signal?: AbortSignal,
 ): Promise<BackendAnalysis> {
   if (BACKEND_URL_ERROR) throw new Error(BACKEND_URL_ERROR);
 
@@ -146,8 +147,10 @@ export async function analyzeUrlWithBackend(
       method: "POST",
       headers: { ...BACKEND_HEADERS, "Content-Type": "application/json" },
       body: JSON.stringify({ url, ...part }),
+      signal,
     });
-  } catch {
+  } catch (err) {
+    if (signal?.aborted) throw err;
     throw new Error(
       `Inference server unreachable at ${BACKEND_URL}. ` +
         `The backend may be offline.`,
@@ -172,6 +175,7 @@ export async function analyzeUrlWithBackend(
 export async function analyzeWithBackend(
   file: File,
   segment: { start: number; end: number } | null = null,
+  signal?: AbortSignal,
 ): Promise<BackendAnalysis> {
   if (BACKEND_URL_ERROR) throw new Error(BACKEND_URL_ERROR);
 
@@ -189,8 +193,10 @@ export async function analyzeWithBackend(
       method: "POST",
       body: form,
       headers: BACKEND_HEADERS,
+      signal,
     });
-  } catch {
+  } catch (err) {
+    if (signal?.aborted) throw err;
     throw new Error(
       `Inference server unreachable at ${BACKEND_URL}. ` +
         `The backend may be offline.`,
