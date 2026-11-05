@@ -25,6 +25,34 @@ const BACKEND_HEADERS: Record<string, string> = {
   "ngrok-skip-browser-warning": "true",
 };
 
+/** No response at all: offline, a slow connection that dropped, or the server is down. */
+function connectionError(): Error {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return new Error("You are offline. Check your internet connection and try again.");
+  }
+  return new Error(
+    "Could not reach the analysis server. Check your internet connection and try again. " +
+      "If your connection is working, the server may be temporarily offline.",
+  );
+}
+
+/** The server forwards yt-dlp's reason, which repeats the pasted URL. */
+function linkErrorMessage(detail: string): string {
+  if (/unsupported url/i.test(detail)) {
+    return "This link is not supported. Paste a link to a public YouTube, TikTok or Facebook video.";
+  }
+  if (/host could not be resolved/i.test(detail)) {
+    return "The website in this link could not be found. Check the link and try again.";
+  }
+  return detail
+    .replace(/\(\s*https?:\/\/[^\s)]*\s*\)/gi, "")
+    .replace(/https?:\/\/\S+/gi, "")
+    .replace(/\bERROR:\s*/g, "")
+    .replace(/\s+([.,:;])/g, "$1")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 /** Shape returned by POST /analyze — matches inference.py's contract
  *  plus the server-added modelVersion label. */
 export interface BackendAnalysis {
@@ -151,10 +179,7 @@ export async function analyzeUrlWithBackend(
     });
   } catch (err) {
     if (signal?.aborted) throw err;
-    throw new Error(
-      `Inference server unreachable at ${BACKEND_URL}. ` +
-        `The backend may be offline.`,
-    );
+    throw connectionError();
   }
   if (!res.ok) {
     let detail = res.statusText;
@@ -163,7 +188,7 @@ export async function analyzeUrlWithBackend(
     } catch {
       /* non-JSON error body */
     }
-    throw new Error(detail);
+    throw new Error(typeof detail === "string" ? linkErrorMessage(detail) : detail);
   }
   const data = (await res.json()) as BackendAnalysis;
   if (typeof data.modelVersion === "string") {
@@ -197,10 +222,7 @@ export async function analyzeWithBackend(
     });
   } catch (err) {
     if (signal?.aborted) throw err;
-    throw new Error(
-      `Inference server unreachable at ${BACKEND_URL}. ` +
-        `The backend may be offline.`,
-    );
+    throw connectionError();
   }
 
   if (!res.ok) {
